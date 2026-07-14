@@ -1366,10 +1366,11 @@ async function generateStudioImage(){
   const subjInp = document.getElementById('genSubject');
   const subject = subjInp.value.trim();
   const preset = activePreset();
-  if(!subject && !(preset && preset.prompt.trim())){ alert('이미지 내용을 입력하거나 지침을 선택하세요.'); return; }
+  if(!subject && !(preset && preset.prompt.trim()) && !studioRefImages.length){ alert('이미지 내용을 입력하거나, 지침을 선택하거나, 원본 이미지를 올리세요.'); return; }
   let fullPrompt = '';
   if(preset && preset.prompt.trim()) fullPrompt += preset.prompt.trim();
   if(subject) fullPrompt += (fullPrompt ? '\n\n' : '') + subject;
+  if(!fullPrompt && studioRefImages.length) fullPrompt = '이 이미지를 더 보기 좋게 개선해줘.';
   const btn = document.getElementById('genStudioBtn');
   btn.disabled = true; btn.textContent = '생성 중...';
   try{
@@ -1552,13 +1553,14 @@ async function generateText(vi){
   if(!key){ alert('먼저 ⚙ API 설정에서 Gemini API 키를 입력하세요.'); toggleSettings(); return; }
   const topicInp = document.getElementById('workTopic');
   const topic = topicInp.value.trim();
-  if(!topic){ alert('주제나 키워드를 입력하세요.'); return; }
+  const hasRefImages = (refImages[v.id]||[]).length > 0;
+  if(!topic && !hasRefImages){ alert('주제를 입력하거나 참고 이미지를 첨부하세요.'); return; }
   v.workTopic = topic; save();
   const btn = document.getElementById('genTextBtn');
   btn.disabled = true; btn.textContent = '생성 중...';
   try{
     const model = data.settings.textModel || 'gemini-2.5-flash';
-    const parts = [{text: topic}];
+    const parts = [{text: topic || '첨부한 이미지를 보고 어울리는 블로그 글을 작성해줘.'}];
     // 참고 이미지가 있으면 함께 전송 (Gemini가 이미지를 보고 글 작성)
     (refImages[v.id]||[]).forEach(r=>{
       const match = r.dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/s);
