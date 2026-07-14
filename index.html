@@ -1118,7 +1118,7 @@ function renderAiPanel(v, vi){
         <div style="margin-top:8px;">
           <input type="file" id="refFileInput" accept="image/*" multiple style="display:none;" onchange="handleRefFiles(this.files, '${v.id}')">
           <div class="attach-drop" id="refDrop" onclick="document.getElementById('refFileInput').click()" style="padding:10px;">
-            🖼 참고 이미지 — 클릭 또는 드래그해서 추가 (AI가 이미지를 보고 글을 씁니다 · 최대 5장)
+            🖼 참고 이미지 — 클릭·드래그·Ctrl+V 붙여넣기로 추가 (AI가 이미지를 보고 글을 씁니다 · 최대 5장)
           </div>
           ${(refImages[v.id]||[]).length ? `
           <div class="attach-grid" style="margin-top:8px;">
@@ -1254,7 +1254,7 @@ function renderImageGenContent(){
         <div class="section-label">원본 이미지 (선택 · 올린 이미지를 바꾸거나 변형할 때)</div>
         <input type="file" id="studioRefInput" accept="image/*" multiple style="display:none;" onchange="handleStudioRefFiles(this.files)">
         <div class="attach-drop" id="studioDrop" onclick="document.getElementById('studioRefInput').click()">
-          🖼 클릭해서 이미지 선택 또는 여기로 드래그 (최대 4장)<br>
+          🖼 클릭·드래그·Ctrl+V 붙여넣기로 이미지 추가 (최대 4장)<br>
           <span style="font-size:11.5px;">예: 인물 사진 올리고 "이 사람을 한국인으로 바꿔줘" / 상품 사진 올리고 "배경을 흰색으로"</span>
         </div>
         ${studioRefImages.length ? `
@@ -1698,6 +1698,28 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // 드롭존 밖에 파일을 떨어뜨려도 브라우저가 페이지를 이탈해 이미지를 열지 않도록 방지
 window.addEventListener('dragover', e=>e.preventDefault());
 window.addEventListener('drop', e=>e.preventDefault());
+
+// 클립보드 이미지 붙여넣기 (Ctrl+V): 현재 보고 있는 화면에 맞는 곳으로 이미지 추가
+document.addEventListener('paste', e=>{
+  const items = Array.from((e.clipboardData||{}).items||[]);
+  const imgItems = items.filter(it=>it.type && it.type.startsWith('image/'));
+  if(!imgItems.length) return; // 텍스트 붙여넣기는 평소대로 동작
+  const files = imgItems.map(it=>it.getAsFile()).filter(Boolean);
+  if(!files.length) return;
+
+  if(data.activeCategory === 'imagegen'){
+    e.preventDefault();
+    handleStudioRefFiles(files);
+    return;
+  }
+  // 네이버블로그 글쓰기 카드가 열려있으면 참고 이미지로 추가
+  const activeId = data.activeVenture[data.activeCategory];
+  const v = data.ventures.find(x=>x.id===activeId);
+  if(v && v.category==='blog' && v.group==='naver'){
+    e.preventDefault();
+    handleRefFiles(files, v.id);
+  }
+});
 
 renderAll();
 
