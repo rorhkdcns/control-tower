@@ -1028,6 +1028,10 @@ function renderContentArea(){
   if(isNaver){
     const topicInp = document.getElementById('workTopic');
     if(topicInp) topicInp.addEventListener('keydown', e=>{ if(e.key==='Enter') generateText(vi); });
+    const imgInp = document.getElementById('imgPrompt');
+    if(imgInp) imgInp.addEventListener('keydown', e=>{ if(e.key==='Enter') generateImage(vi); });
+    const titleInp = document.getElementById('workTitle');
+    if(titleInp) titleInp.addEventListener('keydown', e=>{ if(e.key==='Enter') generateTitle(vi); });
     wireAttachDropzone(v.id);
     const refDrop = document.getElementById('refDrop');
     if(refDrop){
@@ -1135,9 +1139,22 @@ function renderAiPanel(v, vi){
       </div>
 
       <div>
+        <div class="section-label">제목</div>
+        <div class="mini-addrow">
+          <input type="text" id="workTitle" placeholder="제목 (직접 입력하거나 아래 버튼으로 생성)" value="${escAttr(v.workTitle||'')}" onblur="updateWorkTitle(${vi}, this.value)">
+          <button class="mini violet" id="genTitleBtn" onclick="generateTitle(${vi})">제목 생성</button>
+          <button class="mini" onclick="copyWorkTitle(${vi})">복사</button>
+        </div>
+        <div id="titleSuggestions" style="margin-top:8px;"></div>
+      </div>
+
+      <div>
         <div class="section-label">생성된 글 (편집 가능)</div>
         <textarea id="workBody" style="min-height:200px;" onblur="updateWorkBody(${vi}, this.value)" placeholder="생성 결과가 여기에 표시됩니다">${esc(v.workBody||'')}</textarea>
-        <div style="margin-top:8px;"><button class="mini" onclick="copyWorkBody(${vi})">본문 복사</button></div>
+        <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="mini" onclick="copyWorkBody(${vi})">본문 복사</button>
+          <button class="mini violet" id="genThumbBtn" onclick="generateThumbnail(${vi})">🖼 썸네일 자동 생성 (1000×1000)</button>
+        </div>
       </div>
 
       <div>
@@ -1146,6 +1163,10 @@ function renderAiPanel(v, vi){
           <input type="text" id="imgPrompt" placeholder="이미지 프롬프트 (비워두면 위 주제 사용)">
           <button class="mini violet" id="genImgBtn" onclick="generateImage(${vi})">이미지 생성</button>
         </div>
+        <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:12.5px; color:var(--text-dim); cursor:pointer;">
+          <input type="checkbox" id="imgUseRefs" style="accent-color:var(--violet); width:14px; height:14px;" ${(refImages[v.id]||[]).length?'':'disabled'}>
+          위 참고 이미지를 함께 사용 (올린 이미지 기반으로 생성/변형)
+        </label>
         <div id="imgResult" style="margin-top:12px;">
           ${cachedImg ? `<img src="${cachedImg}" style="max-width:420px;">
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
@@ -1436,6 +1457,109 @@ async function copyGenImage(gi){
 function removeGenImage(gi){ genGallery.splice(gi,1); renderImageGenContent(); }
 
 function updatePrompt(vi, val){ data.ventures[vi].prompt = val; save(); }
+function updateWorkTitle(vi, val){ data.ventures[vi].workTitle = val; save(); }
+function copyWorkTitle(vi){
+  const t = data.ventures[vi].workTitle || '';
+  if(!t){ alert('복사할 제목이 없습니다.'); return; }
+  navigator.clipboard.writeText(t).then(()=>alert('제목이 복사되었습니다.')).catch(()=>alert('복사 실패'));
+}
+
+async function generateTitle(vi){
+  const v = data.ventures[vi];
+  const key = data.settings.geminiApiKey;
+  if(!key){ alert('먼저 ⚙ API 설정에서 Gemini API 키를 입력하세요.'); toggleSettings(); return; }
+  const source = (v.workBody && v.workBody.trim()) || (document.getElementById('workTopic') ? document.getElementById('workTopic').value.trim() : v.workTopic);
+  if(!source){ alert('먼저 글을 생성하거나 주제를 입력하세요.'); return; }
+  const btn = document.getElementById('genTitleBtn');
+  btn.disabled = true; btn.textContent = '생성 중...';
+  const sugEl = document.getElementById('titleSuggestions');
+  try{
+    const model = data.settings.textModel || 'gemini-2.5-flash';
+    const sysPrompt = '너는 네이버 블로그 제목 작성 전문가다. 주어진 글(또는 주제)에 어울리는 클릭을 부르는 한국어 제목 5개를 만들어라. 검색 키워드가 자연스럽게 포함되게 하고, 낚시성 과장은 피한다. 응답은 반드시 JSON 배열만 출력: ["제목1","제목2","제목3","제목4","제목5"]. 다른 텍스트나 백틱 없이.';
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        systemInstruction:{parts:[{text: sysPrompt}]},
+        contents:[{role:'user', parts:[{text: source.slice(0, 4000)}]}]
+      })
+    });
+    const json = await res.json();
+    if(!res.ok){ throw new Error((json.error && json.error.message) || ('요청 실패 (' + res.status + ')')); }
+    const respParts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
+    let text = respParts.map(p=>p.text||'').join('\n').replace(/```json|```/g,'').trim();
+    const arrMatch = text.match(/\[[\s\S]*\]/);
+    if(!arrMatch) throw new Error('제목 결과를 해석하지 못했습니다. 다시 시도해주세요.');
+    const titles = JSON.parse(arrMatch[0]).filter(t=>typeof t==='string' && t.trim());
+    sugEl.innerHTML = titles.map(t=>`
+      <div class="preset-chip" style="margin-bottom:4px; display:flex;" onclick="pickTitle(${vi}, this.textContent)">${esc(t)}</div>
+    `).join('') + `<div style="font-size:11.5px;color:var(--text-faint);margin-top:4px;">마음에 드는 제목을 클릭하면 위 제목칸에 들어갑니다.</div>`;
+  }catch(e){
+    alert('제목 생성 실패: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '제목 생성';
+  }
+}
+function pickTitle(vi, title){
+  data.ventures[vi].workTitle = title.trim();
+  save();
+  const inp = document.getElementById('workTitle');
+  if(inp) inp.value = title.trim();
+}
+
+async function generateThumbnail(vi){
+  const v = data.ventures[vi];
+  const key = data.settings.geminiApiKey;
+  if(!key){ alert('먼저 ⚙ API 설정에서 Gemini API 키를 입력하세요.'); toggleSettings(); return; }
+  const body = (v.workBody||'').trim();
+  if(!body){ alert('먼저 글을 생성하세요. 생성된 글 내용을 바탕으로 썸네일을 만듭니다.'); return; }
+  const btn = document.getElementById('genThumbBtn');
+  btn.disabled = true; btn.textContent = '썸네일 생성 중...';
+  try{
+    const model = data.settings.imageModel || 'gemini-3.1-flash-image';
+    const thumbPrompt = '다음 블로그 글의 핵심 내용을 한눈에 표현하는 정사각형(1:1) 블로그 썸네일 이미지를 만들어줘. 밝고 깔끔한 스타일, 글자나 텍스트는 넣지 말 것.\n\n' + (v.workTitle ? '제목: ' + v.workTitle + '\n\n' : '') + '글 내용:\n' + body.slice(0, 3000);
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        contents:[{role:'user', parts:[{text: thumbPrompt}]}],
+        generationConfig:{ responseModalities:['IMAGE','TEXT'], imageConfig:{ aspectRatio:'1:1' } }
+      })
+    });
+    const json = await res.json();
+    if(!res.ok){ throw new Error((json.error && json.error.message) || ('요청 실패 (' + res.status + ')')); }
+    const respParts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
+    const imgPart = respParts.find(p=>p.inlineData);
+    if(!imgPart) throw new Error('이미지가 반환되지 않았습니다. 다시 시도해주세요.');
+    const rawUrl = `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
+    const squared = await resizeToSquare(rawUrl, 1000);
+    if(!attachments[v.id]) attachments[v.id] = [];
+    attachments[v.id].push({ id:'a'+Date.now(), dataUrl:squared, name:'썸네일 1000x1000' });
+    renderContentArea();
+    alert('썸네일이 첨부 이미지에 추가되었습니다 (1000×1000).');
+  }catch(e){
+    alert('썸네일 생성 실패: ' + e.message);
+  } finally {
+    const b = document.getElementById('genThumbBtn');
+    if(b){ b.disabled=false; b.textContent='🖼 썸네일 자동 생성 (1000×1000)'; }
+  }
+}
+function resizeToSquare(dataUrl, size){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const ctx = c.getContext('2d');
+      // cover 방식: 짧은 변 기준으로 중앙 크롭해서 정확히 size x size로
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      const sx = (img.naturalWidth - side) / 2;
+      const sy = (img.naturalHeight - side) / 2;
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = ()=>reject(new Error('이미지 처리 실패'));
+    img.src = dataUrl;
+  });
+}
 
 // ---------- image attachments (in-memory) ----------
 function handleAttachFiles(fileList, ventureId){
@@ -1596,10 +1720,18 @@ async function generateImage(vi){
   btn.disabled = true; btn.textContent = '생성 중...';
   try{
     const model = data.settings.imageModel || 'gemini-3.1-flash-image';
+    const genParts = [{text: prompt}];
+    const useRefs = document.getElementById('imgUseRefs');
+    if(useRefs && useRefs.checked){
+      (refImages[v.id]||[]).forEach(r=>{
+        const match = r.dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/s);
+        if(match){ genParts.push({ inline_data:{ mime_type: match[1], data: match[2] } }); }
+      });
+    }
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        contents:[{role:'user', parts:[{text: prompt}]}],
+        contents:[{role:'user', parts: genParts}],
         generationConfig:{ responseModalities:['IMAGE','TEXT'] }
       })
     });
