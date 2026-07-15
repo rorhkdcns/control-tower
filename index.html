@@ -311,8 +311,10 @@ footer{ text-align:center; margin-top:34px; font-size:12px; color:var(--text-fai
       </div>
       <div style="display:flex; gap:6px; align-items:center; margin-top:10px; flex-wrap:wrap;">
         <button class="mini" onclick="testSyncConnection()">동기화 연결 테스트</button>
+        <button class="mini violet" onclick="makeSyncLink()">🔗 동기화 링크 만들기</button>
         <span id="syncTestResult" style="font-size:12.5px;"></span>
       </div>
+      <div id="syncLinkResult" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -578,6 +580,44 @@ async function pullSync(silent){
   }
   syncBusy = false;
 }
+function makeSyncLink(){
+  const url = document.getElementById('settingsSbUrl').value.trim();
+  const key = document.getElementById('settingsSbKey').value.trim();
+  const sid = document.getElementById('settingsSyncId').value.trim();
+  const resultEl = document.getElementById('syncLinkResult');
+  if(!url || !key || !sid){
+    resultEl.innerHTML = `<div style="font-size:12.5px;color:var(--warn);">먼저 위 세 칸을 입력하고(저장 전이어도 됨) 다시 눌러주세요.</div>`;
+    return;
+  }
+  const payload = btoa(unescape(encodeURIComponent(JSON.stringify({u:url, k:key, s:sid}))));
+  const base = location.origin + location.pathname;
+  const link = base + '?sync=' + payload;
+  resultEl.innerHTML = `
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">이 주소를 다른 기기(사무실 PC, 폰 등)에서 한 번 열거나 북마크해두면, 열자마자 자동으로 동기화 설정이 적용됩니다. <b>이 링크는 API 키가 포함돼 있으니 남에게 공유하지 마세요.</b></div>
+    <div style="display:flex; gap:6px;">
+      <input type="text" readonly value="${escAttr(link)}" style="font-size:11.5px;">
+      <button class="mini" onclick="navigator.clipboard.writeText('${link.replace(/'/g,"&#39;")}').then(()=>alert('링크가 복사되었습니다.'))">복사</button>
+    </div>
+  `;
+}
+
+function applySyncLinkFromUrl(){
+  const params = new URLSearchParams(location.search);
+  const raw = params.get('sync');
+  if(!raw) return;
+  try{
+    const decoded = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if(decoded.u && decoded.k && decoded.s){
+      data.settings.supabaseUrl = decoded.u;
+      data.settings.supabaseKey = decoded.k;
+      data.settings.syncId = decoded.s;
+      save();
+    }
+  }catch(e){ /* 잘못된 링크면 조용히 무시 */ }
+  // 주소창에서 민감정보 파라미터 제거 (북마크는 원래 주소 유지되도록)
+  history.replaceState({}, '', location.origin + location.pathname);
+}
+
 async function testSyncConnection(){
   const url = document.getElementById('settingsSbUrl').value.trim();
   const key = document.getElementById('settingsSbKey').value.trim();
@@ -1855,6 +1895,7 @@ document.addEventListener('paste', e=>{
   }
 });
 
+applySyncLinkFromUrl();
 renderAll();
 
 // 동기화: 시작할 때, 창으로 돌아올 때, 그리고 60초마다 다른 기기의 변경사항 확인
