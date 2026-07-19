@@ -104,12 +104,12 @@ header{
 .addrow{ display:flex; gap:8px; }
 .addrow input{ flex:1; }
 
-input[type=text], input[type=password], textarea{
+input[type=text], input[type=password], textarea, select{
   background:var(--bg); border:1px solid var(--border); color:var(--text);
   border-radius:4px; padding:8px 11px; font-family:var(--font-body); font-size:14px;
   outline:none; width:100%;
 }
-input[type=text]:focus, input[type=password]:focus, textarea:focus{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(176,120,24,0.12); }
+input[type=text]:focus, input[type=password]:focus, textarea:focus, select:focus{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(176,120,24,0.12); }
 input[readonly]{ background:var(--panel-2); color:var(--text-dim); }
 button.mini{
   background:var(--bg); border:1px solid var(--border); color:var(--text);
@@ -168,7 +168,16 @@ button.mini.violet:hover{ background:#4a38b3; border-color:#4a38b3; color:#fff; 
 .account-table .acc-cat{
   display:inline-block; margin-top:2px; font-size:10px; font-family:var(--font-mono); color:var(--violet);
   background:var(--violet-bg); border:1px solid #ddd6fa; padding:1px 6px; border-radius:3px; font-weight:600;
+  cursor:pointer;
 }
+.account-table .acc-cat:hover{ background:#e6e0fa; border-color:var(--violet); }
+.preset-chip.cat-manage{ display:inline-flex; align-items:center; gap:6px; padding-right:6px; }
+.preset-chip.cat-manage .cat-edit, .preset-chip.cat-manage .cat-del{
+  opacity:0; font-size:11px; padding:1px 3px; border-radius:2px; cursor:pointer; color:var(--text-faint);
+}
+.preset-chip.cat-manage:hover .cat-edit, .preset-chip.cat-manage:hover .cat-del{ opacity:1; }
+.preset-chip.cat-manage .cat-edit:hover{ color:var(--accent-strong); }
+.preset-chip.cat-manage .cat-del:hover{ color:var(--issue); }
 .account-table .acc-url-link{ font-size:12.5px; font-family:var(--font-mono); color:var(--text-dim); text-decoration:none; }
 .account-table .acc-url-link:hover{ color:var(--accent-strong); }
 .account-table .acc-mono{ font-family:var(--font-mono); font-size:13px; }
@@ -414,6 +423,7 @@ const defaultData = {
   imagePresets: [],
   activeImagePresetId: null,
   accounts: [],
+  accountCategories: ['호스팅/도메인','개발/API','광고','금융','기타'],
   quicklinks: [
     {label:'GitHub', url:'https://github.com/rorhkdcns'},
     {label:'Vercel', url:'https://vercel.com/dashboard'},
@@ -494,6 +504,7 @@ function load(){
       if(!parsed.imagePresets) parsed.imagePresets = [];
       if(parsed.activeImagePresetId===undefined) parsed.activeImagePresetId = null;
       if(!parsed.accounts) parsed.accounts = [];
+      if(!parsed.accountCategories) parsed.accountCategories = ['호스팅/도메인','개발/API','광고','금융','기타'];
       if(parsed.priorities) parsed.priorities.forEach(p=>{
         if(p.created===undefined) p.created = null;
         if(p.due===undefined) p.due = null;
@@ -515,6 +526,7 @@ function load(){
       old.imagePresets = [];
       old.activeImagePresetId = null;
       old.accounts = [];
+      old.accountCategories = ['호스팅/도메인','개발/API','광고','금융','기타'];
       if(old.priorities) old.priorities.forEach(p=>{
         if(p.created===undefined) p.created = null;
         if(p.due===undefined) p.due = null;
@@ -1560,23 +1572,31 @@ const DEFAULT_ACCOUNT_CATEGORIES = ['호스팅/도메인','개발/API','광고',
 
 function renderAccountsContent(){
   const el = document.getElementById('contentArea');
-  const cats = Array.from(new Set([...DEFAULT_ACCOUNT_CATEGORIES, ...data.accounts.map(a=>a.category).filter(Boolean)]));
+  if(!data.accountCategories) data.accountCategories = ['호스팅/도메인','개발/API','광고','금융','기타'];
+  // 계정에 쓰였는데 관리 목록에 없는 분류는 자동으로 편입 (기존 데이터 보존)
+  data.accounts.forEach(a=>{ if(a.category && !data.accountCategories.includes(a.category)) data.accountCategories.push(a.category); });
+
   const filtered = activeAccountFilter==='all' ? data.accounts : data.accounts.filter(a=>a.category===activeAccountFilter);
 
   const filterChips = `
     <div class="account-filter-bar">
       <div class="preset-chip ${activeAccountFilter==='all'?'active':''}" onclick="setAccountFilter('all')">전체 (${data.accounts.length})</div>
-      ${cats.map(c=>{
+      ${data.accountCategories.map(c=>{
         const count = data.accounts.filter(a=>a.category===c).length;
-        return `<div class="preset-chip ${activeAccountFilter===c?'active':''}" onclick="setAccountFilter('${escAttr(c)}')">${esc(c)} (${count})</div>`;
+        return `<div class="preset-chip cat-manage ${activeAccountFilter===c?'active':''}">
+          <span onclick="setAccountFilter('${escAttr(c)}')">${esc(c)} (${count})</span>
+          <span class="cat-edit" onclick="event.stopPropagation();renameCategory('${escAttr(c)}')" title="이름 수정">✎</span>
+          <span class="cat-del" onclick="event.stopPropagation();deleteCategory('${escAttr(c)}')" title="분류 삭제">✕</span>
+        </div>`;
       }).join('')}
+      <div class="subtab-add" onclick="addCategory()">+ 분류 추가</div>
     </div>`;
 
   const bodyRows = filtered.length ? filtered.map(a=>`
     <tr>
       <td>
         <div class="acc-name">${esc(a.name)}</div>
-        ${a.category ? `<span class="acc-cat">${esc(a.category)}</span>` : ''}
+        ${a.category ? `<span class="acc-cat" onclick="setAccountFilter('${escAttr(a.category)}')" title="이 분류로 필터링">${esc(a.category)}</span>` : ''}
       </td>
       <td>${a.url ? `<a href="${escAttr(a.url)}" target="_blank" rel="noopener" class="acc-url-link">열기 ↗</a>` : `<span class="acc-empty">—</span>`}</td>
       <td>
@@ -1628,13 +1648,50 @@ function renderAccountsContent(){
 }
 function setAccountFilter(cat){ activeAccountFilter = cat; renderAccountsContent(); }
 
+function addCategory(){
+  showFormModal('분류 추가', [
+    {key:'name', label:'분류 이름', placeholder:'예: SNS, 결제/PG, 이메일'}
+  ], (r)=>{
+    const name = r.name.trim();
+    if(!name) return;
+    if(data.accountCategories.includes(name)){ alert('이미 있는 분류입니다.'); return; }
+    data.accountCategories.push(name);
+    save(); renderAccountsContent();
+  });
+}
+function renameCategory(oldName){
+  showFormModal('분류 이름 수정', [
+    {key:'name', label:'분류 이름', value:oldName}
+  ], (r)=>{
+    const name = r.name.trim();
+    if(!name || name===oldName) return;
+    if(data.accountCategories.includes(name)){ alert('이미 있는 분류 이름입니다.'); return; }
+    const idx = data.accountCategories.indexOf(oldName);
+    if(idx>-1) data.accountCategories[idx] = name;
+    data.accounts.forEach(a=>{ if(a.category===oldName) a.category = name; });
+    if(activeAccountFilter===oldName) activeAccountFilter = name;
+    save(); renderAccountsContent();
+  });
+}
+function deleteCategory(name){
+  const count = data.accounts.filter(a=>a.category===name).length;
+  const msg = count>0
+    ? `"${name}" 분류를 삭제할까요?\n이 분류를 쓰는 계정 ${count}개는 분류 없음으로 바뀝니다 (계정 자체는 유지됩니다).`
+    : `"${name}" 분류를 삭제할까요?`;
+  if(!confirm(msg)) return;
+  data.accountCategories = data.accountCategories.filter(c=>c!==name);
+  data.accounts.forEach(a=>{ if(a.category===name) a.category=''; });
+  if(activeAccountFilter===name) activeAccountFilter='all';
+  save(); renderAccountsContent();
+}
+
 function addAccount(){
   showFormModal('계정 추가', [
     {key:'name', label:'서비스 이름', placeholder:'예: Vercel, Supabase, 카페24, 은행 OTP'},
     {key:'url', label:'로그인 페이지 URL', placeholder:'https://...'},
     {key:'username', label:'아이디'},
     {key:'pw', label:'비밀번호 (이 기기에만 저장)', type:'password'},
-    {key:'category', label:'분류', placeholder:'호스팅/도메인, 개발/API, 광고, 금융, 기타'},
+    {key:'category', label:'분류', type:'select', options:['', ...data.accountCategories], value:''},
     {key:'note', label:'메모', type:'textarea'},
   ], (r)=>{
     if(!r.name.trim()) return;
@@ -1653,7 +1710,7 @@ function editAccount(id){
     {key:'url', label:'로그인 페이지 URL', value:a.url},
     {key:'username', label:'아이디', value:a.username},
     {key:'pw', label:'비밀번호 (이 기기에만 저장)', type:'password', value:a.pw},
-    {key:'category', label:'분류', value:a.category},
+    {key:'category', label:'분류', type:'select', options:['', ...data.accountCategories], value:a.category},
     {key:'note', label:'메모', type:'textarea', value:a.note},
   ], (r)=>{
     if(!r.name.trim()) return;
@@ -2064,6 +2121,8 @@ function showFormModal(title, fields, onSubmit){
           <label>${esc(f.label)}</label>
           ${f.type === 'textarea'
             ? `<textarea id="mf_${f.key}" placeholder="${escAttr(f.placeholder||'')}">${esc(f.value||'')}</textarea>`
+            : f.type === 'select'
+            ? `<select id="mf_${f.key}">${(f.options||[]).map(o=>`<option value="${escAttr(o)}" ${o===f.value?'selected':''}>${esc(o||'(선택 안 함)')}</option>`).join('')}</select>`
             : `<input type="${f.type||'text'}" id="mf_${f.key}" placeholder="${escAttr(f.placeholder||'')}" value="${escAttr(f.value||'')}">`
           }
         </div>
