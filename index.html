@@ -171,7 +171,8 @@ button.mini.violet:hover{ background:#4a38b3; border-color:#4a38b3; color:#fff; 
   cursor:pointer;
 }
 .account-table .acc-cat:hover{ background:#e6e0fa; border-color:var(--violet); }
-.preset-chip.cat-manage{ display:inline-flex; align-items:center; gap:6px; padding-right:6px; }
+.preset-chip.cat-manage{ display:inline-flex; align-items:center; gap:6px; padding-right:6px; cursor:grab; }
+.preset-chip.cat-manage:active{ cursor:grabbing; }
 .preset-chip.cat-manage .cat-edit, .preset-chip.cat-manage .cat-del{
   opacity:0; font-size:11px; padding:1px 3px; border-radius:2px; cursor:pointer; color:var(--text-faint);
 }
@@ -487,7 +488,60 @@ const defaultData = {
 };
 
 let data = load();
-let imageCache = {}; // in-memory only, not persisted (avoid localStorage bloat)
+let imageCache = {};
+
+// ---------- one-time data migrations (run once per synced dataset, tracked via data.migrations) ----------
+if(!data.migrations) data.migrations = {};
+
+function migrateQuicklinksToAccounts(){
+  if(data.migrations.quicklinksMoved) return false;
+  const catMap = {
+    'GitHub':'개발/API', 'Vercel':'개발/API', 'Supabase':'개발/API', 'Search Console':'개발/API',
+    '네이버 광고관리시스템':'광고'
+  };
+  const skip = ['네이버 블로그 글쓰기']; // 이미 네이버블로그 프로젝트 카드 안 링크와 중복이라 제외
+  let changed = false;
+  (data.quicklinks||[]).forEach(l=>{
+    if(skip.includes(l.label)) return;
+    const exists = data.accounts.some(a=>a.url===l.url);
+    if(!exists){
+      const cat = catMap[l.label] || '기타';
+      if(!data.accountCategories.includes(cat)) data.accountCategories.push(cat);
+      data.accounts.push({
+        id:'acc'+Date.now()+Math.random().toString(36).slice(2,6),
+        name:l.label, url:l.url, username:'', pw:'', category:cat, note:'', showPw:false
+      });
+      changed = true;
+    }
+  });
+  data.quicklinks = [];
+  data.migrations.quicklinksMoved = true;
+  return true;
+}
+
+function seedFreeKeywordTools(){
+  if(data.migrations.keywordToolsSeeded) return false;
+  const cat = '키워드리서치';
+  if(!data.accountCategories.includes(cat)) data.accountCategories.push(cat);
+  const tools = [
+    {name:'네이버 데이터랩', url:'https://datalab.naver.com', note:'검색어 트렌드 · 완전 무료 · 가입 불필요'},
+    {name:'네이버 검색광고 키워드도구', url:'https://searchad.naver.com', note:'무료 가입 후 키워드 검색량 조회'},
+    {name:'키워드마스터', url:'https://whereispost.com/keyword', note:'네이버 검색량+블로그 경쟁도 · 완전 무료 · 로그인 불필요'},
+  ];
+  let changed = false;
+  tools.forEach(t=>{
+    if(!data.accounts.some(a=>a.url===t.url)){
+      data.accounts.push({
+        id:'acc'+Date.now()+Math.random().toString(36).slice(2,6),
+        name:t.name, url:t.url, username:'', pw:'', category:cat, note:t.note, showPw:false
+      });
+      changed = true;
+    }
+  });
+  data.migrations.keywordToolsSeeded = true;
+  return true;
+}
+
 let attachments = {}; // { ventureId: [{id, dataUrl, name}] } in-memory only
 let refImages = {}; // { ventureId: [{dataUrl, name}] } 글 생성시 AI에게 보여줄 참고 이미지 (in-memory)
 
@@ -670,18 +724,21 @@ function makeSyncLink(){
 function applySyncLinkFromUrl(){
   const params = new URLSearchParams(location.search);
   const raw = params.get('sync');
-  if(!raw) return;
+  if(!raw) return false;
+  let applied = false;
   try{
     const decoded = JSON.parse(decodeURIComponent(escape(atob(raw))));
     if(decoded.u && decoded.k && decoded.s){
       data.settings.supabaseUrl = decoded.u;
       data.settings.supabaseKey = decoded.k;
       data.settings.syncId = decoded.s;
-      save();
+      applied = true;
+      // 여기서는 저장/푸시하지 않음 — 원격 데이터를 먼저 받아온 뒤에 저장해야
+      // 이 기기의 텅 빈 초기 상태가 실수로 서버 데이터를 덮어쓰지 않는다.
     }
   }catch(e){ /* 잘못된 링크면 조용히 무시 */ }
-  // 주소창에서 민감정보 파라미터 제거 (북마크는 원래 주소 유지되도록)
   history.replaceState({}, '', location.origin + location.pathname);
+  return applied;
 }
 
 async function testSyncConnection(){
@@ -1095,6 +1152,39 @@ function subtabDrop(e, targetId){
 function subtabDragEnd(e){
   e.target.style.opacity = '';
   dragVentureId = null;
+}
+
+// ---------- drag-to-reorder account category chips ----------
+let dragCatName = null;
+function catDragStart(e, name){
+  dragCatName = name;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', name);
+  e.currentTarget.style.opacity = '0.4';
+}
+function catDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.style.borderColor = 'var(--violet)';
+}
+function catDragLeave(e){
+  e.currentTarget.style.borderColor = '';
+}
+function catDrop(e, targetName){
+  e.preventDefault();
+  e.currentTarget.style.borderColor = '';
+  if(!dragCatName || dragCatName===targetName){ dragCatName=null; return; }
+  const fromIdx = data.accountCategories.indexOf(dragCatName);
+  if(fromIdx<0){ dragCatName=null; return; }
+  data.accountCategories.splice(fromIdx,1);
+  const toIdx = data.accountCategories.indexOf(targetName);
+  data.accountCategories.splice(toIdx<0?data.accountCategories.length:toIdx, 0, dragCatName);
+  dragCatName = null;
+  save(); renderAccountsContent();
+}
+function catDragEnd(e){
+  e.currentTarget.style.opacity = '';
+  dragCatName = null;
 }
 
 function renderContentArea(){
@@ -1622,7 +1712,8 @@ function renderAccountsContent(){
       <div class="preset-chip ${activeAccountFilter==='all'?'active':''}" onclick="setAccountFilter('all')">전체 (${data.accounts.length})</div>
       ${data.accountCategories.map(c=>{
         const count = data.accounts.filter(a=>a.category===c).length;
-        return `<div class="preset-chip cat-manage ${activeAccountFilter===c?'active':''}">
+        return `<div class="preset-chip cat-manage ${activeAccountFilter===c?'active':''}" draggable="true"
+          ondragstart="catDragStart(event,'${escAttr(c)}')" ondragover="catDragOver(event)" ondragleave="catDragLeave(event)" ondrop="catDrop(event,'${escAttr(c)}')" ondragend="catDragEnd(event)">
           <span onclick="setAccountFilter('${escAttr(c)}')">${esc(c)} (${count})</span>
           <span class="cat-edit" onclick="event.stopPropagation();renameCategory('${escAttr(c)}')" title="이름 수정">✎</span>
           <span class="cat-del" onclick="event.stopPropagation();deleteCategory('${escAttr(c)}')" title="분류 삭제">✕</span>
@@ -2237,13 +2328,36 @@ document.addEventListener('paste', e=>{
   }
 });
 
-applySyncLinkFromUrl();
-renderAll();
+async function boot(){
+  const linkApplied = applySyncLinkFromUrl();
 
-// 동기화: 시작할 때, 창으로 돌아올 때, 그리고 60초마다 다른 기기의 변경사항 확인
-if(syncEnabled()){ pullSync(); }
-window.addEventListener('focus', ()=>{ if(syncEnabled()) pullSync(true); });
-setInterval(()=>{ if(syncEnabled() && !document.hidden) pullSync(true); }, 60000);
+  // 원격 동기화가 켜져 있으면, 이 기기의 로컬(혹은 방금 적용된 기본값) 데이터로
+  // 아무것도 저장/전송하기 전에 먼저 서버의 최신 데이터를 받아온다.
+  // 순서를 반대로 하면 새 기기의 텅 빈 초기 상태가 서버의 진짜 데이터를
+  // 덮어써버리는 사고가 날 수 있다 (실제로 한 번 발생했던 문제).
+  if(syncEnabled()){
+    await pullSync(true);
+  } else if(linkApplied){
+    // 링크로 설정만 적용되고 아직 동기화 판단이 안 된 극히 예외적인 경우 대비
+    localStorage.setItem(STORAGE_KEY_V4, JSON.stringify(data));
+  }
+
+  // 원격 데이터를 반영한 뒤(또는 원격이 없어 로컬 데이터 그대로인 채로) 1회성 마이그레이션 수행
+  const changed1 = migrateQuicklinksToAccounts();
+  const changed2 = seedFreeKeywordTools();
+  if(changed1 || changed2){
+    save(); // 여기서의 save()는 이미 원격 데이터를 받은 '이후'라 안전하게 push된다
+  } else if(linkApplied){
+    localStorage.setItem(STORAGE_KEY_V4, JSON.stringify(data));
+  }
+
+  renderAll();
+
+  // 이후: 창으로 돌아올 때, 그리고 60초마다 다른 기기의 변경사항 확인
+  window.addEventListener('focus', ()=>{ if(syncEnabled()) pullSync(true); });
+  setInterval(()=>{ if(syncEnabled() && !document.hidden) pullSync(true); }, 60000);
+}
+boot();
 </script>
 </body>
 </html>
