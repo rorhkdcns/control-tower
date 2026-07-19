@@ -1201,8 +1201,9 @@ function renderContentArea(){
     emptyLabel = CATEGORIES.find(c=>c.id===data.activeCategory).label;
     addCategory = data.activeCategory; storeKey = data.activeCategory;
   }
+  const kwWidgetHtml = data.activeCategory === 'blog' ? renderKeywordWidgetCard() : '';
   if(items.length === 0){
-    el.innerHTML = `<div class="empty-cat">${esc(emptyLabel)}에 등록된 프로젝트가 없습니다.<br>
+    el.innerHTML = kwWidgetHtml + `<div class="empty-cat">${esc(emptyLabel)}에 등록된 프로젝트가 없습니다.<br>
       <button class="mini" onclick="addVenture('${addCategory}'${addGroup?`,'${addGroup}'`:''})">+ ${esc(emptyLabel)} 프로젝트 추가</button></div>`;
     return;
   }
@@ -1212,7 +1213,7 @@ function renderContentArea(){
   const vi = data.ventures.indexOf(v);
   const isNaver = v.category==='blog' && v.group==='naver';
 
-  el.innerHTML = `
+  el.innerHTML = kwWidgetHtml + `
     <div class="card">
       <div class="card-head">
         <div>
@@ -1280,6 +1281,73 @@ function renderContentArea(){
       };
     }
   }
+}
+
+// ---------- 벨루나몰 블로그 키워드 추천 위젯 ----------
+// 매일 새벽 GitHub Actions가 naver-keyword-tool 레포에 올리는
+// data/blog-keywords-latest.json 을 그대로 읽어와서 보여준다.
+const KEYWORD_JSON_URL = 'https://raw.githubusercontent.com/rorhkdcns/naver-keyword-tool/main/data/blog-keywords-latest.json';
+
+function renderKeywordWidgetCard(){
+  return `
+    <div class="card" style="margin-bottom:4px;">
+      <div class="card-head">
+        <div class="card-title"><h3>📌 오늘의 추천 키워드</h3></div>
+        <button class="mini violet" id="kwRefreshBtn" onclick="loadBlogKeywords()">키워드 불러오기</button>
+      </div>
+      <div id="kwStatus" style="font-size:12.5px;color:var(--text-dim);"></div>
+      <div id="kwResults"></div>
+    </div>
+  `;
+}
+
+async function loadBlogKeywords(){
+  const statusEl = document.getElementById('kwStatus');
+  const resultsEl = document.getElementById('kwResults');
+  const btn = document.getElementById('kwRefreshBtn');
+  if(!statusEl || !resultsEl) return;
+  statusEl.textContent = '불러오는 중...';
+  resultsEl.innerHTML = '';
+  if(btn) btn.disabled = true;
+  try{
+    const res = await fetch(KEYWORD_JSON_URL + '?t=' + Date.now());
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const kwData = await res.json();
+    const updated = new Date(kwData.updatedAt).toLocaleString('ko-KR');
+    statusEl.textContent = `업데이트: ${updated} · 전체 ${kwData.total}개 · 추천 ${kwData.recommended}개`;
+    const recommended = (kwData.keywords || []).filter(k => k.diagnoseTag === '포스팅추천');
+    if(!recommended.length){
+      resultsEl.innerHTML = '<div style="font-size:13px;color:var(--text-faint);">오늘 추천 등급 키워드가 없습니다.</div>';
+      return;
+    }
+    resultsEl.innerHTML = `
+      <div class="account-table-wrap" style="margin-top:8px;">
+        <table class="account-table">
+          <thead><tr><th>키워드</th><th>검색량</th><th>경쟁도</th><th>점수</th></tr></thead>
+          <tbody>
+            ${recommended.map(k => `
+              <tr style="cursor:pointer;" onclick="copyKeyword('${esc(k.keyword).replace(/'/g,"&#39;")}')" title="클릭하면 복사됨">
+                <td class="acc-name">${esc(k.keyword)}</td>
+                <td>${Number(k.total).toLocaleString()}</td>
+                <td>${esc(k.compIdx)}</td>
+                <td style="color:var(--accent-strong);font-weight:700;">${esc(String(k.score))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }catch(e){
+    statusEl.textContent = '';
+    resultsEl.innerHTML = `<div style="font-size:13px;color:var(--issue);">불러오기 실패: ${esc(e.message)}</div>`;
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+function copyKeyword(text){
+  navigator.clipboard.writeText(text)
+    .then(()=>alert('키워드가 복사되었습니다: ' + text))
+    .catch(()=>alert('복사에 실패했습니다.'));
 }
 
 // ---------- admin login panel ----------
