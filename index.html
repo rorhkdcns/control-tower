@@ -154,19 +154,28 @@ button.mini.violet:hover{ background:#4a38b3; border-color:#4a38b3; color:#fff; 
 .gen-gallery .gitem img{ width:100%; border-radius:3px; }
 .gen-gallery .gitem .gprompt{ font-size:11px; color:var(--text-faint); line-height:1.4; max-height:44px; overflow:hidden; }
 
-.account-list{ display:flex; flex-direction:column; gap:8px; }
-.account-row{
-  display:flex; flex-wrap:wrap; align-items:center; gap:10px;
-  border:1px solid var(--border); border-radius:4px; padding:10px 14px; background:var(--bg);
+.account-table-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:4px; }
+.account-table{ width:100%; border-collapse:collapse; font-size:13.5px; min-width:640px; }
+.account-table thead th{
+  text-align:left; font-family:var(--font-mono); font-size:11px; font-weight:700; text-transform:uppercase;
+  color:var(--text-dim); background:var(--bg-soft); border-bottom:1px solid var(--border);
+  padding:9px 12px; white-space:nowrap;
 }
-.account-row .acc-name{ font-weight:700; font-size:14px; min-width:130px; }
-.account-row .acc-cat{
-  font-size:10.5px; font-family:var(--font-mono); color:var(--violet); background:var(--violet-bg);
-  border:1px solid #ddd6fa; padding:1px 7px; border-radius:3px; font-weight:600;
+.account-table tbody td{ padding:10px 12px; border-bottom:1px solid var(--border-soft); vertical-align:middle; }
+.account-table tbody tr:last-child td{ border-bottom:none; }
+.account-table tbody tr:hover{ background:var(--bg-soft); }
+.account-table .acc-name{ font-weight:700; }
+.account-table .acc-cat{
+  display:inline-block; margin-top:2px; font-size:10px; font-family:var(--font-mono); color:var(--violet);
+  background:var(--violet-bg); border:1px solid #ddd6fa; padding:1px 6px; border-radius:3px; font-weight:600;
 }
-.account-row .acc-fields{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; flex:1; min-width:260px; }
-.account-row .acc-fields input{ width:auto; min-width:110px; font-size:12.5px; padding:5px 8px; }
-.account-row .acc-actions{ display:flex; gap:4px; margin-left:auto; }
+.account-table .acc-url-link{ font-size:12.5px; font-family:var(--font-mono); color:var(--text-dim); text-decoration:none; }
+.account-table .acc-url-link:hover{ color:var(--accent-strong); }
+.account-table .acc-mono{ font-family:var(--font-mono); font-size:13px; }
+.account-table .acc-empty{ color:var(--text-faint); }
+.account-table .acc-cell-copy{ display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.account-table .acc-copy-btn{ font-size:11px; padding:3px 8px; }
+.account-table .acc-note-cell{ color:var(--text-dim); font-size:12.5px; max-width:220px; }
 .account-filter-bar{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
 
 .modal-overlay{
@@ -1563,27 +1572,37 @@ function renderAccountsContent(){
       }).join('')}
     </div>`;
 
-  const rows = filtered.length ? filtered.map(a=>`
-    <div class="account-row">
-      <div>
+  const bodyRows = filtered.length ? filtered.map(a=>`
+    <tr>
+      <td>
         <div class="acc-name">${esc(a.name)}</div>
         ${a.category ? `<span class="acc-cat">${esc(a.category)}</span>` : ''}
-        ${a.url ? `<div class="card-links" style="margin-top:4px;"><a href="${escAttr(a.url)}" target="_blank" rel="noopener">열기 ↗</a></div>` : ''}
-      </div>
-      <div class="acc-fields">
-        <input type="text" readonly value="${escAttr(a.username||'(아이디 없음)')}">
-        <button class="mini" onclick="copyAccountField('${a.id}','username')">아이디복사</button>
-        <input type="${a.showPw?'text':'password'}" readonly value="${escAttr(a.pw||'')}" placeholder="(비번 없음)">
-        <button class="mini" onclick="toggleAccountPw('${a.id}')">${a.showPw?'숨기기':'표시'}</button>
-        <button class="mini" onclick="copyAccountField('${a.id}','pw')">비번복사</button>
-      </div>
-      ${a.note ? `<div style="width:100%; font-size:12px; color:var(--text-faint); padding-left:2px;">${esc(a.note)}</div>` : ''}
-      <div class="acc-actions">
-        <span class="link-add" onclick="editAccount('${a.id}')">수정</span>
-        <span class="card-remove" onclick="deleteAccount('${a.id}')">삭제</span>
-      </div>
-    </div>
-  `).join('') : `<div class="empty-cat">등록된 계정이 없습니다.<br><button class="mini violet" onclick="addAccount()">+ 첫 계정 추가</button></div>`;
+      </td>
+      <td>${a.url ? `<a href="${escAttr(a.url)}" target="_blank" rel="noopener" class="acc-url-link">열기 ↗</a>` : `<span class="acc-empty">—</span>`}</td>
+      <td>
+        <div class="acc-cell-copy">
+          <span class="acc-mono">${a.username ? esc(a.username) : '<span class="acc-empty">—</span>'}</span>
+          ${a.username ? `<button class="mini acc-copy-btn" onclick="copyAccountField('${a.id}','username')">복사</button>` : ''}
+        </div>
+      </td>
+      <td>
+        <div class="acc-cell-copy">
+          <span class="acc-mono">${a.pw ? (a.showPw ? esc(a.pw) : '••••••••') : '<span class="acc-empty">—</span>'}</span>
+          ${a.pw ? `
+            <button class="mini acc-copy-btn" onclick="toggleAccountPw('${a.id}')">${a.showPw?'숨김':'표시'}</button>
+            <button class="mini acc-copy-btn" onclick="copyAccountField('${a.id}','pw')">복사</button>
+          ` : ''}
+        </div>
+      </td>
+      <td class="acc-note-cell">${a.note ? esc(a.note) : ''}</td>
+      <td>
+        <div style="display:flex; gap:4px; justify-content:flex-end;">
+          <span class="link-add" onclick="editAccount('${a.id}')">수정</span>
+          <span class="card-remove" onclick="deleteAccount('${a.id}')">삭제</span>
+        </div>
+      </td>
+    </tr>
+  `).join('') : `<tr><td colspan="6"><div class="empty-cat" style="border:none;">등록된 계정이 없습니다.<br><button class="mini violet" onclick="addAccount()">+ 첫 계정 추가</button></div></td></tr>`;
 
   el.innerHTML = `
     <div class="card">
@@ -1596,7 +1615,14 @@ function renderAccountsContent(){
         계정 목록은 기기 간 동기화되지만, <b>비밀번호는 보안을 위해 이 기기에만 저장</b>되어 다른 기기에서는 다시 입력해야 합니다.
       </div>
       ${data.accounts.length ? filterChips : ''}
-      <div class="account-list">${rows}</div>
+      <div class="account-table-wrap">
+        <table class="account-table">
+          <thead>
+            <tr><th>서비스</th><th>링크</th><th>아이디</th><th>비밀번호</th><th>메모</th><th></th></tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
     </div>
   `;
 }
