@@ -212,6 +212,8 @@ button.mini.violet:hover{ background:#4a38b3; border-color:#4a38b3; color:#fff; 
 .subtab .led-mini{ width:8px; height:8px; border-radius:50%; }
 .subtab:hover{ border-color:var(--text-dim); color:var(--text); }
 .subtab.active{ border-color:var(--accent-strong); color:var(--accent-strong); background:var(--accent-bg); }
+.subtab[draggable="true"]{ cursor:grab; }
+.subtab[draggable="true"]:active{ cursor:grabbing; }
 .subtab.group-pill.active{ border-color:var(--violet); color:var(--violet); background:var(--violet-bg); }
 .subtab-add{ font-size:13px; padding:7px 14px; border-radius:4px; border:1px dashed var(--border); color:var(--text-faint); cursor:pointer; font-weight:600; }
 .subtab-add:hover{ color:var(--accent-strong); border-color:var(--accent); }
@@ -1038,7 +1040,9 @@ function renderSecondaryNav(){
     if(siteItems.length){
       const activeId = data.activeVenture['blog'];
       sitesHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;padding-left:2px;">` +
-        siteItems.map(v=>`<div class="subtab ${v.id===activeId?'active':''}" onclick="selectVenture('${v.id}')">
+        siteItems.map(v=>`<div class="subtab ${v.id===activeId?'active':''}" draggable="true"
+          ondragstart="subtabDragStart(event,'${v.id}')" ondragover="subtabDragOver(event)" ondragleave="subtabDragLeave(event)" ondrop="subtabDrop(event,'${v.id}')" ondragend="subtabDragEnd(event)"
+          onclick="selectVenture('${v.id}')">
           <span class="led-mini" style="background:${statusColorVar[v.status]}"></span>${esc(v.name)}
         </div>`).join('') +
         `<div class="subtab-add" onclick="addVenture('blog','${data.activeBlogGroup}')">+ 추가</div></div>`;
@@ -1052,10 +1056,45 @@ function renderSecondaryNav(){
     if(items.length <= 1){ el.innerHTML=''; el.style.display='none'; return; }
     el.style.display='flex'; el.style.flexDirection='row'; el.style.flexWrap='wrap'; el.style.gap='8px';
     const activeId = data.activeVenture[data.activeCategory];
-    el.innerHTML = items.map(v => `<div class="subtab ${v.id===activeId?'active':''}" onclick="selectVenture('${v.id}')">
+    el.innerHTML = items.map(v => `<div class="subtab ${v.id===activeId?'active':''}" draggable="true"
+        ondragstart="subtabDragStart(event,'${v.id}')" ondragover="subtabDragOver(event)" ondragleave="subtabDragLeave(event)" ondrop="subtabDrop(event,'${v.id}')" ondragend="subtabDragEnd(event)"
+        onclick="selectVenture('${v.id}')">
         <span class="led-mini" style="background:${statusColorVar[v.status]}"></span>${esc(v.name)}
       </div>`).join('') + `<div class="subtab-add" onclick="addVenture('${data.activeCategory}')">+ 추가</div>`;
   }
+}
+
+// ---------- drag-to-reorder sub-menu buttons ----------
+let dragVentureId = null;
+function subtabDragStart(e, id){
+  dragVentureId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', id);
+  e.target.style.opacity = '0.4';
+}
+function subtabDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.style.borderColor = 'var(--violet)';
+}
+function subtabDragLeave(e){
+  e.currentTarget.style.borderColor = '';
+}
+function subtabDrop(e, targetId){
+  e.preventDefault();
+  e.currentTarget.style.borderColor = '';
+  if(!dragVentureId || dragVentureId===targetId){ dragVentureId=null; return; }
+  const fromIdx = data.ventures.findIndex(v=>v.id===dragVentureId);
+  if(fromIdx<0){ dragVentureId=null; return; }
+  const [moved] = data.ventures.splice(fromIdx,1);
+  const toIdx = data.ventures.findIndex(v=>v.id===targetId);
+  data.ventures.splice(toIdx<0?data.ventures.length:toIdx, 0, moved);
+  dragVentureId = null;
+  save(); renderSecondaryNav();
+}
+function subtabDragEnd(e){
+  e.target.style.opacity = '';
+  dragVentureId = null;
 }
 
 function renderContentArea(){
