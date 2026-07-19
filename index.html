@@ -169,6 +169,22 @@ button.mini.violet:hover{ background:#4a38b3; border-color:#4a38b3; color:#fff; 
 .account-row .acc-actions{ display:flex; gap:4px; margin-left:auto; }
 .account-filter-bar{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
 
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(28,35,51,0.5);
+  display:none; align-items:center; justify-content:center; z-index:1000; padding:20px;
+}
+.modal-overlay.open{ display:flex; }
+.modal-box{
+  background:#fff; border-radius:6px; border:1px solid var(--border);
+  width:100%; max-width:460px; max-height:88vh; overflow-y:auto;
+  padding:22px 24px; box-shadow:0 12px 36px rgba(28,35,51,0.25);
+}
+.modal-box h3{ font-size:16px; font-weight:800; margin-bottom:16px; }
+.modal-field{ margin-bottom:12px; display:flex; flex-direction:column; gap:5px; }
+.modal-field label{ font-size:11.5px; font-weight:700; color:var(--text-dim); font-family:var(--font-mono); text-transform:uppercase; }
+.modal-field textarea{ min-height:70px; }
+.modal-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+
 .subtabbar{ margin-bottom:18px; }
 .subtab{
   font-size:13px; padding:7px 14px; border-radius:4px; cursor:pointer;
@@ -360,6 +376,10 @@ footer{ text-align:center; margin-top:34px; font-size:12px; color:var(--text-fai
   <div id="contentArea"></div>
 
   <footer>모든 데이터는 이 브라우저(localStorage)에만 저장됩니다 · 서버 전송 없음 · API 키/비밀번호는 Google Gemini 및 각 사이트로만 직접 전송됩니다</footer>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box" id="modalBox"></div>
 </div>
 
 <script>
@@ -680,12 +700,14 @@ function renderQuicklinks(){
   `<span class="qlink settings-btn" style="cursor:pointer;" onclick="toggleSettings()">⚙ API 설정</span>`;
 }
 function addQuicklink(){
-  const label = prompt('링크 이름 (예: Blogger)');
-  if(!label) return;
-  const url = prompt('URL 입력');
-  if(!url) return;
-  data.quicklinks.push({label, url});
-  save(); renderQuicklinks();
+  showFormModal('링크 추가', [
+    {key:'label', label:'링크 이름', placeholder:'예: Blogger'},
+    {key:'url', label:'URL'},
+  ], (r)=>{
+    if(!r.label.trim() || !r.url.trim()) return;
+    data.quicklinks.push({label:r.label.trim(), url:r.url.trim()});
+    save(); renderQuicklinks();
+  });
 }
 function toggleSettings(){
   const el = document.getElementById('settingsPanel');
@@ -1146,14 +1168,14 @@ function renderAdminPanel(v, vi){
 }
 function editAdminInfo(vi){
   const v = data.ventures[vi];
-  const url = prompt('관리자 페이지 URL', v.adminUrl||'');
-  if(url===null) return;
-  const id = prompt('아이디', v.adminId||'');
-  if(id===null) return;
-  const pw = prompt('비밀번호 (이 브라우저 로컬에만 저장됩니다)', v.adminPw||'');
-  if(pw===null) return;
-  v.adminUrl = url.trim(); v.adminId = id.trim(); v.adminPw = pw;
-  save(); renderContentArea();
+  showFormModal('관리자 로그인 정보', [
+    {key:'url', label:'관리자 페이지 URL', value:v.adminUrl||''},
+    {key:'id', label:'아이디', value:v.adminId||''},
+    {key:'pw', label:'비밀번호 (이 기기에만 저장)', type:'password', value:v.adminPw||''},
+  ], (r)=>{
+    v.adminUrl = r.url.trim(); v.adminId = r.id.trim(); v.adminPw = r.pw;
+    save(); renderContentArea();
+  });
 }
 function toggleAdminEmbed(vi){ data.ventures[vi].adminEmbedOpen = !data.ventures[vi].adminEmbedOpen; save(); renderContentArea(); }
 function togglePwVisible(vi){ data.ventures[vi].showPw = !data.ventures[vi].showPw; save(); renderContentArea(); }
@@ -1581,36 +1603,38 @@ function renderAccountsContent(){
 function setAccountFilter(cat){ activeAccountFilter = cat; renderAccountsContent(); }
 
 function addAccount(){
-  const name = prompt('서비스 이름 (예: Vercel, Supabase, 카페24, 은행 OTP 등)');
-  if(!name || !name.trim()) return;
-  const url = prompt('로그인 페이지 URL (선택, 없으면 비워두기)', '') || '';
-  const username = prompt('아이디 (선택)', '') || '';
-  const pw = prompt('비밀번호 (선택, 이 기기에만 저장됩니다)', '') || '';
-  const category = prompt('분류 (선택 — 예: 호스팅/도메인, 개발/API, 광고, 금융, 기타)', '') || '';
-  const note = prompt('메모 (선택)', '') || '';
-  data.accounts.push({
-    id:'acc'+Date.now(), name:name.trim(), url:url.trim(), username:username.trim(),
-    pw, category:category.trim(), note:note.trim(), showPw:false
+  showFormModal('계정 추가', [
+    {key:'name', label:'서비스 이름', placeholder:'예: Vercel, Supabase, 카페24, 은행 OTP'},
+    {key:'url', label:'로그인 페이지 URL', placeholder:'https://...'},
+    {key:'username', label:'아이디'},
+    {key:'pw', label:'비밀번호 (이 기기에만 저장)', type:'password'},
+    {key:'category', label:'분류', placeholder:'호스팅/도메인, 개발/API, 광고, 금융, 기타'},
+    {key:'note', label:'메모', type:'textarea'},
+  ], (r)=>{
+    if(!r.name.trim()) return;
+    data.accounts.push({
+      id:'acc'+Date.now(), name:r.name.trim(), url:r.url.trim(), username:r.username.trim(),
+      pw:r.pw, category:r.category.trim(), note:r.note.trim(), showPw:false
+    });
+    save(); renderAccountsContent();
   });
-  save(); renderAccountsContent();
 }
 function editAccount(id){
   const a = data.accounts.find(x=>x.id===id);
   if(!a) return;
-  const name = prompt('서비스 이름', a.name);
-  if(name===null) return;
-  const url = prompt('로그인 페이지 URL', a.url||'');
-  if(url===null) return;
-  const username = prompt('아이디', a.username||'');
-  if(username===null) return;
-  const pw = prompt('비밀번호 (이 기기에만 저장됩니다)', a.pw||'');
-  if(pw===null) return;
-  const category = prompt('분류', a.category||'');
-  if(category===null) return;
-  const note = prompt('메모', a.note||'');
-  if(note===null) return;
-  a.name=name.trim(); a.url=url.trim(); a.username=username.trim(); a.pw=pw; a.category=category.trim(); a.note=note.trim();
-  save(); renderAccountsContent();
+  showFormModal('계정 수정', [
+    {key:'name', label:'서비스 이름', value:a.name},
+    {key:'url', label:'로그인 페이지 URL', value:a.url},
+    {key:'username', label:'아이디', value:a.username},
+    {key:'pw', label:'비밀번호 (이 기기에만 저장)', type:'password', value:a.pw},
+    {key:'category', label:'분류', value:a.category},
+    {key:'note', label:'메모', type:'textarea', value:a.note},
+  ], (r)=>{
+    if(!r.name.trim()) return;
+    a.name=r.name.trim(); a.url=r.url.trim(); a.username=r.username.trim();
+    a.pw=r.pw; a.category=r.category.trim(); a.note=r.note.trim();
+    save(); renderAccountsContent();
+  });
 }
 function deleteAccount(id){
   const a = data.accounts.find(x=>x.id===id);
@@ -1935,12 +1959,14 @@ function cycleStatus(vi){
   save(); renderTabbar(); renderSecondaryNav(); renderContentArea();
 }
 function addLink(vi){
-  const label = prompt('링크 이름 (예: 사이트, GitHub)');
-  if(!label) return;
-  const url = prompt('URL 입력');
-  if(!url) return;
-  data.ventures[vi].links.push({label,url});
-  save(); renderContentArea();
+  showFormModal('링크 추가', [
+    {key:'label', label:'링크 이름', placeholder:'예: 사이트, GitHub'},
+    {key:'url', label:'URL'},
+  ], (r)=>{
+    if(!r.label.trim() || !r.url.trim()) return;
+    data.ventures[vi].links.push({label:r.label.trim(), url:r.url.trim()});
+    save(); renderContentArea();
+  });
 }
 function delLink(vi, li){
   const l = data.ventures[vi].links[li];
@@ -1976,23 +2002,78 @@ function renameVenture(vi){
 function addVenture(category, group){
   const catLabel = CATEGORIES.find(c=>c.id===category).label;
   const label = group ? (BLOG_GROUPS.find(g=>g.id===group) ? BLOG_GROUPS.find(g=>g.id===group).label : catLabel) : catLabel;
-  const name = prompt(`${label}에 추가할 프로젝트/블로그 이름`);
-  if(!name) return;
-  const id = 'v'+Date.now();
-  const newV = { id, category, name, status:'ok', links:[], todos:[], note:'', adminUrl:'', adminId:'', adminPw:'', adminEmbedOpen:false, showPw:false };
-  if(category==='blog'){
-    newV.group = group || data.activeBlogGroup || 'blogspot';
-    if(newV.group === 'naver'){ newV.prompt=''; newV.workTopic=''; newV.workBody=''; }
-  }
-  data.ventures.push(newV);
-  data.activeCategory = category;
-  if(category==='blog'){ data.activeBlogGroup = newV.group; data.activeVenture['blog']=id; }
-  else data.activeVenture[category] = id;
-  save(); renderAll();
+  showFormModal(`${label}에 프로젝트 추가`, [
+    {key:'name', label:'프로젝트 이름'},
+    {key:'url', label:'사이트 URL (선택)'},
+  ], (r)=>{
+    if(!r.name.trim()) return;
+    const id = 'v'+Date.now();
+    const newV = { id, category, name:r.name.trim(), status:'ok', links:[], todos:[], note:'', adminUrl:'', adminId:'', adminPw:'', adminEmbedOpen:false, showPw:false };
+    if(r.url.trim()) newV.links.push({label:'사이트', url:r.url.trim()});
+    if(category==='blog'){
+      newV.group = group || data.activeBlogGroup || 'blogspot';
+      if(newV.group === 'naver'){ newV.prompt=''; newV.workTopic=''; newV.workBody=''; newV.workTitle=''; }
+    }
+    data.ventures.push(newV);
+    data.activeCategory = category;
+    if(category==='blog'){ data.activeBlogGroup = newV.group; data.activeVenture['blog']=id; }
+    else data.activeVenture[category] = id;
+    save(); renderAll();
+  });
 }
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escAttr(s){ return esc(s); }
+
+// ---------- generic multi-field form modal (replaces chained prompt()s) ----------
+let __modalSubmit = null;
+function showFormModal(title, fields, onSubmit){
+  const overlay = document.getElementById('modalOverlay');
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <h3>${esc(title)}</h3>
+    <div id="modalFields">
+      ${fields.map(f => `
+        <div class="modal-field">
+          <label>${esc(f.label)}</label>
+          ${f.type === 'textarea'
+            ? `<textarea id="mf_${f.key}" placeholder="${escAttr(f.placeholder||'')}">${esc(f.value||'')}</textarea>`
+            : `<input type="${f.type||'text'}" id="mf_${f.key}" placeholder="${escAttr(f.placeholder||'')}" value="${escAttr(f.value||'')}">`
+          }
+        </div>
+      `).join('')}
+    </div>
+    <div class="modal-actions">
+      <button class="mini" onclick="closeFormModal()">취소</button>
+      <button class="mini violet" onclick="submitFormModal()">저장</button>
+    </div>
+  `;
+  overlay.classList.add('open');
+  __modalSubmit = () => {
+    const result = {};
+    fields.forEach(f => { result[f.key] = document.getElementById('mf_'+f.key).value; });
+    closeFormModal();
+    onSubmit(result);
+  };
+  document.getElementById('modalFields').addEventListener('keydown', e=>{
+    if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){ e.preventDefault(); submitFormModal(); }
+  });
+  setTimeout(()=>{
+    const first = document.getElementById('mf_'+fields[0].key);
+    if(first) first.focus();
+  }, 30);
+}
+function submitFormModal(){ if(__modalSubmit) __modalSubmit(); }
+function closeFormModal(){
+  document.getElementById('modalOverlay').classList.remove('open');
+  __modalSubmit = null;
+}
+document.getElementById('modalOverlay').addEventListener('click', e=>{
+  if(e.target.id === 'modalOverlay') closeFormModal();
+});
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeFormModal();
+});
 
 function renderAll(){
   renderQuicklinks();
