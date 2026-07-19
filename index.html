@@ -154,6 +154,21 @@ button.mini.violet:hover{ background:#4a38b3; border-color:#4a38b3; color:#fff; 
 .gen-gallery .gitem img{ width:100%; border-radius:3px; }
 .gen-gallery .gitem .gprompt{ font-size:11px; color:var(--text-faint); line-height:1.4; max-height:44px; overflow:hidden; }
 
+.account-list{ display:flex; flex-direction:column; gap:8px; }
+.account-row{
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  border:1px solid var(--border); border-radius:4px; padding:10px 14px; background:var(--bg);
+}
+.account-row .acc-name{ font-weight:700; font-size:14px; min-width:130px; }
+.account-row .acc-cat{
+  font-size:10.5px; font-family:var(--font-mono); color:var(--violet); background:var(--violet-bg);
+  border:1px solid #ddd6fa; padding:1px 7px; border-radius:3px; font-weight:600;
+}
+.account-row .acc-fields{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; flex:1; min-width:260px; }
+.account-row .acc-fields input{ width:auto; min-width:110px; font-size:12.5px; padding:5px 8px; }
+.account-row .acc-actions{ display:flex; gap:4px; margin-left:auto; }
+.account-filter-bar{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
+
 .subtabbar{ margin-bottom:18px; }
 .subtab{
   font-size:13px; padding:7px 14px; border-radius:4px; cursor:pointer;
@@ -369,6 +384,7 @@ const defaultData = {
   settings: { geminiApiKey:'', textModel:'gemini-2.5-flash', imageModel:'gemini-3.1-flash-image', supabaseUrl:'', supabaseKey:'', syncId:'' },
   imagePresets: [],
   activeImagePresetId: null,
+  accounts: [],
   quicklinks: [
     {label:'GitHub', url:'https://github.com/rorhkdcns'},
     {label:'Vercel', url:'https://vercel.com/dashboard'},
@@ -448,6 +464,7 @@ function load(){
       if(!parsed.activeBlogGroup) parsed.activeBlogGroup = 'blogspot';
       if(!parsed.imagePresets) parsed.imagePresets = [];
       if(parsed.activeImagePresetId===undefined) parsed.activeImagePresetId = null;
+      if(!parsed.accounts) parsed.accounts = [];
       if(parsed.priorities) parsed.priorities.forEach(p=>{
         if(p.created===undefined) p.created = null;
         if(p.due===undefined) p.due = null;
@@ -468,6 +485,7 @@ function load(){
       delete old.captureRegions;
       old.imagePresets = [];
       old.activeImagePresetId = null;
+      old.accounts = [];
       if(old.priorities) old.priorities.forEach(p=>{
         if(p.created===undefined) p.created = null;
         if(p.due===undefined) p.due = null;
@@ -507,13 +525,16 @@ function buildSyncPayload(){
   const clone = JSON.parse(JSON.stringify(data));
   delete clone.settings; // 기기별 설정(API키 포함)은 동기화 제외
   clone.ventures.forEach(v=>{ delete v.adminId; delete v.adminPw; delete v.showPw; });
+  if(clone.accounts) clone.accounts.forEach(a=>{ delete a.pw; delete a.showPw; });
   return clone;
 }
 function applyRemotePayload(remote){
-  // 로컬에만 있는 민감정보(관리자 계정)와 기기 설정은 보존하면서 나머지를 원격 데이터로 교체
+  // 로컬에만 있는 민감정보(관리자 계정, 개별 계정 비밀번호)와 기기 설정은 보존하면서 나머지를 원격 데이터로 교체
   const localSettings = data.settings;
   const localAdmin = {};
   data.ventures.forEach(v=>{ localAdmin[v.id] = {adminId:v.adminId||'', adminPw:v.adminPw||''}; });
+  const localAccountPw = {};
+  (data.accounts||[]).forEach(a=>{ localAccountPw[a.id] = a.pw||''; });
   remote.settings = localSettings;
   remote.ventures.forEach(v=>{
     const a = localAdmin[v.id];
@@ -522,6 +543,8 @@ function applyRemotePayload(remote){
     v.showPw = false;
     if(v.adminEmbedOpen===undefined) v.adminEmbedOpen = false;
   });
+  if(!remote.accounts) remote.accounts = [];
+  remote.accounts.forEach(a=>{ a.pw = localAccountPw[a.id] || ''; a.showPw = false; });
   data = remote;
   localStorage.setItem(STORAGE_KEY_V4, JSON.stringify(data));
 }
@@ -912,12 +935,13 @@ function renderTabbar(){
       <span class="dot" style="background:${dotColor}"></span>${esc(c.label)}
     </div>`;
   }).join('') + `<div class="tab tool-tab ${data.activeCategory==='imagegen'?'active':''}" onclick="selectCategory('imagegen')">🎨 이미지 생성</div>`
-  + (data.activeCategory==='imagegen' ? '' : `<div class="tab-add" onclick="addVenture(data.activeCategory, data.activeCategory==='blog'?data.activeBlogGroup:undefined)">+ 새 프로젝트</div>`);
+  + `<div class="tab tool-tab ${data.activeCategory==='accounts'?'active':''}" onclick="selectCategory('accounts')">🔐 계정</div>`
+  + (data.activeCategory==='imagegen'||data.activeCategory==='accounts' ? '' : `<div class="tab-add" onclick="addVenture(data.activeCategory, data.activeCategory==='blog'?data.activeBlogGroup:undefined)">+ 새 프로젝트</div>`);
 }
 
 function selectCategory(catId){
   data.activeCategory = catId;
-  if(catId === 'imagegen'){
+  if(catId === 'imagegen' || catId === 'accounts'){
     // tool tab - no venture bookkeeping
   } else if(catId === 'blog'){
     if(!data.activeBlogGroup) data.activeBlogGroup = 'blogspot';
@@ -949,7 +973,7 @@ function selectVenture(id){
 
 function renderSecondaryNav(){
   const el = document.getElementById('subtabbar');
-  if(data.activeCategory === 'imagegen'){
+  if(data.activeCategory === 'imagegen' || data.activeCategory === 'accounts'){
     el.innerHTML=''; el.style.display='none'; return;
   }
   if(data.activeCategory === 'blog'){
@@ -994,6 +1018,7 @@ function renderSecondaryNav(){
 function renderContentArea(){
   const el = document.getElementById('contentArea');
   if(data.activeCategory === 'imagegen'){ renderImageGenContent(); return; }
+  if(data.activeCategory === 'accounts'){ renderAccountsContent(); return; }
   let items, emptyLabel, addCategory, addGroup, storeKey;
   if(data.activeCategory === 'blog'){
     items = venturesInGroup(data.activeBlogGroup);
@@ -1497,6 +1522,118 @@ async function copyGenImage(gi){
 function removeGenImage(gi){ genGallery.splice(gi,1); renderImageGenContent(); }
 
 function updatePrompt(vi, val){ data.ventures[vi].prompt = val; save(); }
+
+// ---------- accounts vault ----------
+let activeAccountFilter = 'all';
+const DEFAULT_ACCOUNT_CATEGORIES = ['호스팅/도메인','개발/API','광고','금융','기타'];
+
+function renderAccountsContent(){
+  const el = document.getElementById('contentArea');
+  const cats = Array.from(new Set([...DEFAULT_ACCOUNT_CATEGORIES, ...data.accounts.map(a=>a.category).filter(Boolean)]));
+  const filtered = activeAccountFilter==='all' ? data.accounts : data.accounts.filter(a=>a.category===activeAccountFilter);
+
+  const filterChips = `
+    <div class="account-filter-bar">
+      <div class="preset-chip ${activeAccountFilter==='all'?'active':''}" onclick="setAccountFilter('all')">전체 (${data.accounts.length})</div>
+      ${cats.map(c=>{
+        const count = data.accounts.filter(a=>a.category===c).length;
+        return `<div class="preset-chip ${activeAccountFilter===c?'active':''}" onclick="setAccountFilter('${escAttr(c)}')">${esc(c)} (${count})</div>`;
+      }).join('')}
+    </div>`;
+
+  const rows = filtered.length ? filtered.map(a=>`
+    <div class="account-row">
+      <div>
+        <div class="acc-name">${esc(a.name)}</div>
+        ${a.category ? `<span class="acc-cat">${esc(a.category)}</span>` : ''}
+        ${a.url ? `<div class="card-links" style="margin-top:4px;"><a href="${escAttr(a.url)}" target="_blank" rel="noopener">열기 ↗</a></div>` : ''}
+      </div>
+      <div class="acc-fields">
+        <input type="text" readonly value="${escAttr(a.username||'(아이디 없음)')}">
+        <button class="mini" onclick="copyAccountField('${a.id}','username')">아이디복사</button>
+        <input type="${a.showPw?'text':'password'}" readonly value="${escAttr(a.pw||'')}" placeholder="(비번 없음)">
+        <button class="mini" onclick="toggleAccountPw('${a.id}')">${a.showPw?'숨기기':'표시'}</button>
+        <button class="mini" onclick="copyAccountField('${a.id}','pw')">비번복사</button>
+      </div>
+      ${a.note ? `<div style="width:100%; font-size:12px; color:var(--text-faint); padding-left:2px;">${esc(a.note)}</div>` : ''}
+      <div class="acc-actions">
+        <span class="link-add" onclick="editAccount('${a.id}')">수정</span>
+        <span class="card-remove" onclick="deleteAccount('${a.id}')">삭제</span>
+      </div>
+    </div>
+  `).join('') : `<div class="empty-cat">등록된 계정이 없습니다.<br><button class="mini violet" onclick="addAccount()">+ 첫 계정 추가</button></div>`;
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title"><h3>🔐 계정 정리</h3></div>
+        <button class="mini violet" onclick="addAccount()">+ 계정 추가</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-faint);">
+        프로젝트에 속하지 않는 공용 계정(호스팅, API, 광고 플랫폼, 도메인 등록업체 등)을 모아두는 곳입니다.
+        계정 목록은 기기 간 동기화되지만, <b>비밀번호는 보안을 위해 이 기기에만 저장</b>되어 다른 기기에서는 다시 입력해야 합니다.
+      </div>
+      ${data.accounts.length ? filterChips : ''}
+      <div class="account-list">${rows}</div>
+    </div>
+  `;
+}
+function setAccountFilter(cat){ activeAccountFilter = cat; renderAccountsContent(); }
+
+function addAccount(){
+  const name = prompt('서비스 이름 (예: Vercel, Supabase, 카페24, 은행 OTP 등)');
+  if(!name || !name.trim()) return;
+  const url = prompt('로그인 페이지 URL (선택, 없으면 비워두기)', '') || '';
+  const username = prompt('아이디 (선택)', '') || '';
+  const pw = prompt('비밀번호 (선택, 이 기기에만 저장됩니다)', '') || '';
+  const category = prompt('분류 (선택 — 예: 호스팅/도메인, 개발/API, 광고, 금융, 기타)', '') || '';
+  const note = prompt('메모 (선택)', '') || '';
+  data.accounts.push({
+    id:'acc'+Date.now(), name:name.trim(), url:url.trim(), username:username.trim(),
+    pw, category:category.trim(), note:note.trim(), showPw:false
+  });
+  save(); renderAccountsContent();
+}
+function editAccount(id){
+  const a = data.accounts.find(x=>x.id===id);
+  if(!a) return;
+  const name = prompt('서비스 이름', a.name);
+  if(name===null) return;
+  const url = prompt('로그인 페이지 URL', a.url||'');
+  if(url===null) return;
+  const username = prompt('아이디', a.username||'');
+  if(username===null) return;
+  const pw = prompt('비밀번호 (이 기기에만 저장됩니다)', a.pw||'');
+  if(pw===null) return;
+  const category = prompt('분류', a.category||'');
+  if(category===null) return;
+  const note = prompt('메모', a.note||'');
+  if(note===null) return;
+  a.name=name.trim(); a.url=url.trim(); a.username=username.trim(); a.pw=pw; a.category=category.trim(); a.note=note.trim();
+  save(); renderAccountsContent();
+}
+function deleteAccount(id){
+  const a = data.accounts.find(x=>x.id===id);
+  if(!a) return;
+  if(!confirm(`"${a.name}" 계정을 삭제할까요?`)) return;
+  data.accounts = data.accounts.filter(x=>x.id!==id);
+  save(); renderAccountsContent();
+}
+function toggleAccountPw(id){
+  const a = data.accounts.find(x=>x.id===id);
+  if(!a) return;
+  a.showPw = !a.showPw;
+  save(); renderAccountsContent();
+}
+function copyAccountField(id, field){
+  const a = data.accounts.find(x=>x.id===id);
+  if(!a) return;
+  const text = field==='username' ? (a.username||'') : (a.pw||'');
+  if(!text){ alert('복사할 내용이 없습니다.'); return; }
+  navigator.clipboard.writeText(text)
+    .then(()=>alert((field==='username'?'아이디':'비밀번호') + '가 복사되었습니다.'))
+    .catch(()=>alert('복사에 실패했습니다.'));
+}
 function updateWorkTitle(vi, val){ data.ventures[vi].workTitle = val; save(); }
 function copyWorkTitle(vi){
   const t = data.ventures[vi].workTitle || '';
