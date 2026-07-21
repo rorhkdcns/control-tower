@@ -188,6 +188,16 @@ button.mini.violet:hover{ background:#4a38b3; border-color:#4a38b3; color:#fff; 
 .account-table .acc-note-cell{ color:var(--text-dim); font-size:12.5px; max-width:220px; }
 .account-filter-bar{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
 
+.ai-team-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:10px; margin-top:10px; }
+.ai-team-card{
+  border:1px solid var(--border-soft); border-radius:6px; padding:12px 13px; cursor:pointer;
+  background:var(--bg-soft); transition:.15s;
+}
+.ai-team-card:hover{ border-color:var(--accent); background:var(--accent-bg); }
+.ai-team-card-tag{ font-size:10.5px; font-weight:700; color:var(--accent-strong); text-transform:uppercase; letter-spacing:.3px; margin-bottom:4px; font-family:var(--font-mono); }
+.ai-team-card h4{ font-size:14px; margin:0 0 3px; color:var(--text); }
+.ai-team-card p{ font-size:11.5px; color:var(--text-faint); margin:0; }
+
 .modal-overlay{
   position:fixed; inset:0; background:rgba(28,35,51,0.5);
   display:none; align-items:center; justify-content:center; z-index:1000; padding:20px;
@@ -408,25 +418,21 @@ const STORAGE_KEY_V4 = 'th_control_tower_v4';
 const STORAGE_KEY_V3 = 'th_control_tower_v3';
 
 const CATEGORIES = [
-  {id:'gillmong', label:'길몽상점'},
-  {id:'veluna',   label:'벨루나'},
-  {id:'blog',     label:'블로그'},
-  {id:'other',    label:'기타'},
-];
-const BLOG_GROUPS = [
-  {id:'blogspot', label:'블로그스팟 (자동화)'},
-  {id:'naver',    label:'네이버블로그 (AI 글쓰기)'},
+  {id:'naverblog', label:'네이버블로그'},
+  {id:'shorts',    label:'쇼핑쇼츠'},
+  {id:'automation', label:'자동화 현황'},
 ];
 
 const defaultData = {
-  activeCategory: 'gillmong',
+  activeCategory: 'naverblog',
   activeBlogGroup: 'blogspot',
-  activeVenture: { gillmong:'gillmong', veluna:'veluna', blog:'errorblog', other:'naverad' },
+  activeVenture: { naverblog:'nb-veluna', shorts:'shorts-pipeline', automation:'auto-veluna' },
   settings: { geminiApiKey:'', textModel:'gemini-2.5-flash', imageModel:'gemini-3.1-flash-image', supabaseUrl:'', supabaseKey:'', syncId:'' },
   imagePresets: [],
   activeImagePresetId: null,
   accounts: [],
   accountCategories: ['호스팅/도메인','개발/API','광고','금융','기타'],
+  aiTeamResults: {},
   quicklinks: [
     {label:'GitHub', url:'https://github.com/rorhkdcns'},
     {label:'Vercel', url:'https://vercel.com/dashboard'},
@@ -440,49 +446,51 @@ const defaultData = {
   ],
   ventures: [
     {
-      id:'gillmong', category:'gillmong', name:'길몽상점 (gillmong.com)', status:'ok',
-      links:[{label:'사이트', url:'https://gillmong.com'},{label:'GitHub', url:'https://github.com/rorhkdcns/gillmong'}],
-      todos:[
-        {text:'히어로 문구 "좋은 꿈은 사고팔 수 있습니다" 반영 여부 확정', done:false},
-        {text:'상품 카드 - 제목/카테고리태그/감정태그만 남기기', done:false},
-      ],
-      note:'MVP 배포 완료. 결제는 NicePay 에스크로(수수료 20%) 구조.',
-      adminUrl:'', adminId:'', adminPw:'', adminEmbedOpen:false, showPw:false
+      id:'nb-veluna', category:'naverblog', name:'벨루나 네이버블로그', status:'ok',
+      links:[{label:'블로그 홈', url:'https://blog.naver.com'},{label:'글쓰기', url:'https://blog.naver.com/GoBlogWrite.naver'}],
+      todos:[], note:'Gemini 웹으로 초안 작성 후 이미지 포함해서 수동 업로드. 썸네일은 킨포크 스타일(제품 이미지 없이).',
+      prompt:'', workTopic:'', workBody:''
     },
     {
-      id:'errorblog', category:'blog', group:'blogspot', name:'에러 해결 블로그 (error.gwangchoon.com)', status:'warn',
+      id:'nb-gillmong', category:'naverblog', name:'길몽상점 네이버블로그', status:'ok',
+      links:[{label:'블로그 홈', url:'https://blog.naver.com'},{label:'글쓰기', url:'https://blog.naver.com/GoBlogWrite.naver'}],
+      todos:[], note:'Gemini 웹으로 초안 작성 후 이미지 포함해서 수동 업로드. 썸네일은 킨포크 스타일(제품 이미지 없이).',
+      prompt:'', workTopic:'', workBody:''
+    },
+    {
+      id:'shorts-pipeline', category:'shorts', name:'쇼핑쇼츠 자동화 파이프라인', status:'warn',
+      links:[{label:'쿠팡파트너스', url:'https://partners.coupang.com'}],
+      todos:[
+        {text:'대본 생성 (쿠팡파트너스 API → 상품데이터 → Gemini 대본)', done:false},
+        {text:'보이스 + 자막 (TTS)', done:false},
+        {text:'영상 합성 (FFmpeg + 스톡영상)', done:false},
+        {text:'유튜브 쇼츠 업로드 자동화', done:false},
+      ],
+      note:'상품데이터→대본→보이스/자막→영상합성→업로드. 3~4단계(보이스/자막, 영상합성)가 막혀있는 지점.'
+    },
+    {
+      id:'auto-veluna', category:'automation', name:'벨루나 자동포스팅 (블로그·인스타·스레드)', status:'ok',
+      links:[{label:'사이트', url:'https://velunamall.com'},{label:'GitHub', url:'https://github.com/rorhkdcns/veluna-auto-post'},{label:'Search Console', url:'https://search.google.com/search-console'}],
+      todos:[ {text:'인스타그램 자동 포스팅 - 아직 미구축', done:false}, {text:'스레드 자동 포스팅 - 아직 미구축', done:false} ],
+      note:'Sheets → 상품선택 → 이미지 리호스팅 → Gemini 생성 → Blogger 발행까지 자동화 완료.'
+    },
+    {
+      id:'auto-gillmong', category:'automation', name:'길몽상점 자동포스팅 (블로그·인스타·스레드)', status:'issue',
+      links:[{label:'사이트', url:'https://gillmong.com'},{label:'Search Console', url:'https://search.google.com/search-console'}],
+      todos:[ {text:'블로그/인스타/스레드 자동 포스팅 - 아직 미구축, 벨루나 파이프라인 참고해서 확장 예정', done:false} ],
+      note:'길몽상점 쪽은 아직 자동 포스팅 파이프라인이 없음.'
+    },
+    {
+      id:'errorblog', category:'automation', name:'에러 해결 블로그 (error.gwangchoon.com)', status:'warn',
       links:[{label:'사이트', url:'https://error.gwangchoon.com'},{label:'Search Console', url:'https://search.google.com/search-console'}],
       todos:[ {text:'사이트맵 인덱싱 결과 확인 (제출 후 1~2주 대기중)', done:false} ],
       note:'9개 포스트 발행 완료. gwangchoon.com Gemini+GitHub Actions 파이프라인이 핵심 도구.'
     },
     {
-      id:'carblog', category:'blog', group:'blogspot', name:'자동차 블로그 (car.gwangchoon.com)', status:'issue',
-      links:[{label:'사이트', url:'https://car.gwangchoon.com'},{label:'GitHub', url:'https://github.com/rorhkdcns'}],
+      id:'carblog', category:'automation', name:'자동차 블로그 (car.gwangchoon.com)', status:'issue',
+      links:[{label:'사이트', url:'https://car.gwangchoon.com'},{label:'GitHub', url:'https://github.com/rorhkdcns'},{label:'Search Console', url:'https://search.google.com/search-console'}],
       todos:[ {text:'토큰 재발급: get_token.py 실행 → 로그인/승인 → token_base64.txt → GitHub Secrets 교체 → 워크플로우 재실행', done:false} ],
       note:'자동 발행 스크립트는 완성/정상. 토큰 재발급만 하면 재가동.'
-    },
-    {
-      id:'naverblog', category:'blog', group:'naver', name:'네이버 블로그', status:'ok',
-      links:[{label:'블로그 홈', url:'https://blog.naver.com'},{label:'글쓰기', url:'https://blog.naver.com/GoBlogWrite.naver'}],
-      todos:[], note:'AI로 초안 작성 후 이미지 포함해서 수동 업로드.',
-      prompt:'', workTopic:'', workBody:''
-    },
-    {
-      id:'veluna', category:'veluna', name:'벨루나몰 (velunamall.com)', status:'ok',
-      links:[{label:'사이트', url:'https://velunamall.com'},{label:'GitHub', url:'https://github.com/rorhkdcns/veluna-auto-post'}],
-      todos:[], note:'Sheets → 상품선택 → 이미지 리호스팅 → Gemini 생성 → Blogger 발행 자동화 완료.',
-      adminUrl:'', adminId:'', adminPw:'', adminEmbedOpen:false, showPw:false
-    },
-    {
-      id:'naverad', category:'other', name:'네이버 광고 (온라인 쇼핑몰 SA)', status:'warn',
-      links:[{label:'네이버 광고관리시스템', url:'https://searchad.naver.com/'}],
-      todos:[ {text:'키워드 진단 스크립트 실행 상태 점검 (삭제후보/입찰인상/유지/검토필요 태깅)', done:false} ],
-      note:'SA API 자격 확보됨. 실행 여부 불확실 - 재확인 필요.'
-    },
-    {
-      id:'inventory', category:'other', name:'재고관리 시스템 (헤어다이 창고)', status:'ok',
-      links:[{label:'앱', url:'https://rorhkdcns.github.io/inventory-system'},{label:'GitHub', url:'https://github.com/rorhkdcns/inventory-system'}],
-      todos:[], note:'Supabase 마이그레이션 완료, 멀티기기 실시간 동기화 확인됨.'
     },
   ]
 };
@@ -542,6 +550,68 @@ function seedFreeKeywordTools(){
   return true;
 }
 
+// 길몽상점/벨루나/블로그/기타 프로젝트카드 체계 → 네이버블로그/쇼핑쇼츠/자동화현황 6메뉴 체계로 전환
+function migrateToFunctionMenu(){
+  if(data.migrations.functionMenuV1) return false;
+  data.ventures.forEach(v=>{
+    if(v.category==='blog' && v.group==='blogspot'){
+      // 블로그스팟 자동화(에러/자동차 블로그) → 자동화 현황 탭으로 이동, 데이터(할일/링크/노트)는 그대로 유지
+      v.category = 'automation';
+      delete v.group;
+      if(!v.links.some(l=>l.label==='Search Console')) v.links.push({label:'Search Console', url:'https://search.google.com/search-console'});
+    } else if(v.category==='blog' && v.group==='naver'){
+      // 기존 단일 네이버블로그 카드 → 벨루나 네이버블로그로 전환 (실제로 벨루나 위주로 쓰셨던 카드)
+      v.category = 'naverblog';
+      v.id = 'nb-veluna';
+      v.name = '벨루나 네이버블로그';
+      delete v.group;
+    } else if(v.category==='veluna'){
+      // 벨루나몰 프로젝트카드 → 벨루나 자동포스팅(자동화 현황)으로 전환, 기존 노트/링크 유지
+      v.category = 'automation';
+      v.id = 'auto-veluna';
+      v.name = '벨루나 자동포스팅 (블로그·인스타·스레드)';
+      if(!v.links.some(l=>l.label==='Search Console')) v.links.push({label:'Search Console', url:'https://search.google.com/search-console'});
+    }
+    // 'gillmong', 'other' 카테고리(길몽상점 사이트 카드, 네이버광고, 재고관리)는 새 6메뉴에 없어서 화면에서는 빠짐(데이터는 보존됨)
+  });
+  // 길몽상점 네이버블로그 카드가 없으면 새로 추가
+  if(!data.ventures.some(v=>v.id==='nb-gillmong')){
+    data.ventures.push({
+      id:'nb-gillmong', category:'naverblog', name:'길몽상점 네이버블로그', status:'ok',
+      links:[{label:'블로그 홈', url:'https://blog.naver.com'},{label:'글쓰기', url:'https://blog.naver.com/GoBlogWrite.naver'}],
+      todos:[], note:'Gemini 웹으로 초안 작성 후 이미지 포함해서 수동 업로드. 썸네일은 킨포크 스타일(제품 이미지 없이).',
+      prompt:'', workTopic:'', workBody:''
+    });
+  }
+  // 쇼핑쇼츠 파이프라인 카드가 없으면 새로 추가
+  if(!data.ventures.some(v=>v.id==='shorts-pipeline')){
+    data.ventures.push({
+      id:'shorts-pipeline', category:'shorts', name:'쇼핑쇼츠 자동화 파이프라인', status:'warn',
+      links:[{label:'쿠팡파트너스', url:'https://partners.coupang.com'}],
+      todos:[
+        {text:'대본 생성 (쿠팡파트너스 API → 상품데이터 → Gemini 대본)', done:false},
+        {text:'보이스 + 자막 (TTS)', done:false},
+        {text:'영상 합성 (FFmpeg + 스톡영상)', done:false},
+        {text:'유튜브 쇼츠 업로드 자동화', done:false},
+      ],
+      note:'상품데이터→대본→보이스/자막→영상합성→업로드. 3~4단계(보이스/자막, 영상합성)가 막혀있는 지점.'
+    });
+  }
+  // 길몽상점 자동포스팅 카드가 없으면 새로 추가
+  if(!data.ventures.some(v=>v.id==='auto-gillmong')){
+    data.ventures.push({
+      id:'auto-gillmong', category:'automation', name:'길몽상점 자동포스팅 (블로그·인스타·스레드)', status:'issue',
+      links:[{label:'사이트', url:'https://gillmong.com'},{label:'Search Console', url:'https://search.google.com/search-console'}],
+      todos:[ {text:'블로그/인스타/스레드 자동 포스팅 - 아직 미구축, 벨루나 파이프라인 참고해서 확장 예정', done:false} ],
+      note:'길몽상점 쪽은 아직 자동 포스팅 파이프라인이 없음.'
+    });
+  }
+  data.activeCategory = 'naverblog';
+  data.activeVenture = { naverblog:'nb-veluna', shorts:'shorts-pipeline', automation:'auto-veluna' };
+  data.migrations.functionMenuV1 = true;
+  return true;
+}
+
 let attachments = {}; // { ventureId: [{id, dataUrl, name}] } in-memory only
 let refImages = {}; // { ventureId: [{dataUrl, name}] } 글 생성시 AI에게 보여줄 참고 이미지 (in-memory)
 
@@ -561,6 +631,7 @@ function load(){
       if(parsed.activeImagePresetId===undefined) parsed.activeImagePresetId = null;
       if(!parsed.accounts) parsed.accounts = [];
       if(!parsed.accountCategories) parsed.accountCategories = ['호스팅/도메인','개발/API','광고','금융','기타'];
+      if(!parsed.aiTeamResults) parsed.aiTeamResults = {};
       if(parsed.priorities) parsed.priorities.forEach(p=>{
         if(p.created===undefined) p.created = null;
         if(p.due===undefined) p.due = null;
@@ -591,7 +662,7 @@ function load(){
         v.adminUrl = v.adminUrl||''; v.adminId = v.adminId||''; v.adminPw = v.adminPw||'';
         v.adminEmbedOpen = false; v.showPw = false;
       });
-      if(old.activeCategory === 'capture') old.activeCategory = 'gillmong';
+      if(old.activeCategory === 'capture' || !CATEGORIES.find(c=>c.id===old.activeCategory)) old.activeCategory = 'naverblog';
       return old;
     }
   }catch(e){}
@@ -1021,7 +1092,6 @@ const statusLabel = {ok:'정상 가동', warn:'확인 필요', issue:'이슈 발
 const statusColorVar = {ok:'var(--ok)', warn:'var(--warn)', issue:'var(--issue)'};
 
 function venturesInCategory(catId){ return data.ventures.filter(v => v.category === catId); }
-function venturesInGroup(groupId){ return data.ventures.filter(v => v.category==='blog' && v.group===groupId); }
 
 function renderTabbar(){
   const el = document.getElementById('tabbar');
@@ -1036,35 +1106,24 @@ function renderTabbar(){
     return `<div class="tab ${data.activeCategory===c.id?'active':''}" onclick="selectCategory('${c.id}')">
       <span class="dot" style="background:${dotColor}"></span>${esc(c.label)}
     </div>`;
-  }).join('') + `<div class="tab tool-tab ${data.activeCategory==='imagegen'?'active':''}" onclick="selectCategory('imagegen')">🎨 이미지 생성</div>`
+  }).join('')
+  + `<div class="tab tool-tab ${data.activeCategory==='keywords'?'active':''}" onclick="selectCategory('keywords')">🔑 네이버키워드광고</div>`
+  + `<div class="tab tool-tab ${data.activeCategory==='imagegen'?'active':''}" onclick="selectCategory('imagegen')">🎨 이미지 생성</div>`
+  + `<div class="tab tool-tab ${data.activeCategory==='aiteam'?'active':''}" onclick="selectCategory('aiteam')">💡 아이디어회의</div>`
   + `<div class="tab tool-tab ${data.activeCategory==='accounts'?'active':''}" onclick="selectCategory('accounts')">🔐 계정</div>`
-  + (data.activeCategory==='imagegen'||data.activeCategory==='accounts' ? '' : `<div class="tab-add" onclick="addVenture(data.activeCategory, data.activeCategory==='blog'?data.activeBlogGroup:undefined)">+ 새 프로젝트</div>`);
+  + (['imagegen','accounts','aiteam','keywords'].includes(data.activeCategory) ? '' : `<div class="tab-add" onclick="addVenture(data.activeCategory)">+ 새 프로젝트</div>`);
 }
 
 function selectCategory(catId){
   data.activeCategory = catId;
-  if(catId === 'imagegen' || catId === 'accounts'){
+  if(['imagegen','accounts','aiteam','keywords'].includes(catId)){
     // tool tab - no venture bookkeeping
-  } else if(catId === 'blog'){
-    if(!data.activeBlogGroup) data.activeBlogGroup = 'blogspot';
-    ensureActiveVentureForBlogGroup();
   } else {
     const items = venturesInCategory(catId);
     if(items.length && !items.find(v=>v.id===data.activeVenture[catId])){
       data.activeVenture[catId] = items[0].id;
     }
   }
-  save(); renderAll();
-}
-function ensureActiveVentureForBlogGroup(){
-  const items = venturesInGroup(data.activeBlogGroup);
-  if(items.length && !items.find(v=>v.id===data.activeVenture['blog'])){
-    data.activeVenture['blog'] = items[0].id;
-  }
-}
-function selectBlogGroup(groupId){
-  data.activeBlogGroup = groupId;
-  ensureActiveVentureForBlogGroup();
   save(); renderAll();
 }
 function selectVenture(id){
@@ -1075,50 +1134,18 @@ function selectVenture(id){
 
 function renderSecondaryNav(){
   const el = document.getElementById('subtabbar');
-  if(data.activeCategory === 'imagegen' || data.activeCategory === 'accounts'){
+  if(['imagegen','accounts','aiteam','keywords'].includes(data.activeCategory)){
     el.innerHTML=''; el.style.display='none'; return;
   }
-  if(data.activeCategory === 'blog'){
-    el.style.display='flex'; el.style.flexDirection='column'; el.style.gap='10px';
-    const groupPills = BLOG_GROUPS.map(g=>{
-      const items = venturesInGroup(g.id);
-      let dotColor = '#3a4266';
-      if(items.length){
-        if(items.some(v=>v.status==='issue')) dotColor='var(--issue)';
-        else if(items.some(v=>v.status==='warn')) dotColor='var(--warn)';
-        else dotColor='var(--ok)';
-      }
-      return `<div class="subtab group-pill ${data.activeBlogGroup===g.id?'active':''}" onclick="selectBlogGroup('${g.id}')">
-        <span class="led-mini" style="background:${dotColor}"></span>${esc(g.label)}
-      </div>`;
-    }).join('');
-    const siteItems = venturesInGroup(data.activeBlogGroup);
-    let sitesHtml;
-    if(siteItems.length){
-      const activeId = data.activeVenture['blog'];
-      sitesHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;padding-left:2px;">` +
-        siteItems.map(v=>`<div class="subtab ${v.id===activeId?'active':''}" draggable="true"
-          ondragstart="subtabDragStart(event,'${v.id}')" ondragover="subtabDragOver(event)" ondragleave="subtabDragLeave(event)" ondrop="subtabDrop(event,'${v.id}')" ondragend="subtabDragEnd(event)"
-          onclick="selectVenture('${v.id}')">
-          <span class="led-mini" style="background:${statusColorVar[v.status]}"></span>${esc(v.name)}
-        </div>`).join('') +
-        `<div class="subtab-add" onclick="addVenture('blog','${data.activeBlogGroup}')">+ 추가</div></div>`;
-    } else {
-      const label = BLOG_GROUPS.find(g=>g.id===data.activeBlogGroup).label;
-      sitesHtml = `<div style="padding-left:2px;"><div class="subtab-add" onclick="addVenture('blog','${data.activeBlogGroup}')">+ ${esc(label)}에 추가</div></div>`;
-    }
-    el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;">${groupPills}</div>` + sitesHtml;
-  } else {
-    const items = venturesInCategory(data.activeCategory);
-    if(items.length <= 1){ el.innerHTML=''; el.style.display='none'; return; }
-    el.style.display='flex'; el.style.flexDirection='row'; el.style.flexWrap='wrap'; el.style.gap='8px';
-    const activeId = data.activeVenture[data.activeCategory];
-    el.innerHTML = items.map(v => `<div class="subtab ${v.id===activeId?'active':''}" draggable="true"
-        ondragstart="subtabDragStart(event,'${v.id}')" ondragover="subtabDragOver(event)" ondragleave="subtabDragLeave(event)" ondrop="subtabDrop(event,'${v.id}')" ondragend="subtabDragEnd(event)"
-        onclick="selectVenture('${v.id}')">
-        <span class="led-mini" style="background:${statusColorVar[v.status]}"></span>${esc(v.name)}
-      </div>`).join('') + `<div class="subtab-add" onclick="addVenture('${data.activeCategory}')">+ 추가</div>`;
-  }
+  const items = venturesInCategory(data.activeCategory);
+  if(items.length <= 1){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='flex'; el.style.flexDirection='row'; el.style.flexWrap='wrap'; el.style.gap='8px';
+  const activeId = data.activeVenture[data.activeCategory];
+  el.innerHTML = items.map(v => `<div class="subtab ${v.id===activeId?'active':''}" draggable="true"
+      ondragstart="subtabDragStart(event,'${v.id}')" ondragover="subtabDragOver(event)" ondragleave="subtabDragLeave(event)" ondrop="subtabDrop(event,'${v.id}')" ondragend="subtabDragEnd(event)"
+      onclick="selectVenture('${v.id}')">
+      <span class="led-mini" style="background:${statusColorVar[v.status]}"></span>${esc(v.name)}
+    </div>`).join('') + `<div class="subtab-add" onclick="addVenture('${data.activeCategory}')">+ 추가</div>`;
 }
 
 // ---------- drag-to-reorder sub-menu buttons ----------
@@ -1191,29 +1218,25 @@ function renderContentArea(){
   const el = document.getElementById('contentArea');
   if(data.activeCategory === 'imagegen'){ renderImageGenContent(); return; }
   if(data.activeCategory === 'accounts'){ renderAccountsContent(); return; }
-  let items, emptyLabel, addCategory, addGroup, storeKey;
-  if(data.activeCategory === 'blog'){
-    items = venturesInGroup(data.activeBlogGroup);
-    emptyLabel = BLOG_GROUPS.find(g=>g.id===data.activeBlogGroup).label;
-    addCategory = 'blog'; addGroup = data.activeBlogGroup; storeKey = 'blog';
-  } else {
-    items = venturesInCategory(data.activeCategory);
-    emptyLabel = CATEGORIES.find(c=>c.id===data.activeCategory).label;
-    addCategory = data.activeCategory; storeKey = data.activeCategory;
-  }
-  const kwWidgetHtml = data.activeCategory === 'blog' ? renderKeywordWidgetCard() : '';
+  if(data.activeCategory === 'aiteam'){ renderAiTeamContent(); return; }
+  if(data.activeCategory === 'keywords'){ el.innerHTML = renderKeywordWidgetCard(); return; }
+
+  const items = venturesInCategory(data.activeCategory);
+  const emptyLabel = CATEGORIES.find(c=>c.id===data.activeCategory).label;
+  const addCategory = data.activeCategory; const storeKey = data.activeCategory;
+
   if(items.length === 0){
-    el.innerHTML = kwWidgetHtml + `<div class="empty-cat">${esc(emptyLabel)}에 등록된 프로젝트가 없습니다.<br>
-      <button class="mini" onclick="addVenture('${addCategory}'${addGroup?`,'${addGroup}'`:''})">+ ${esc(emptyLabel)} 프로젝트 추가</button></div>`;
+    el.innerHTML = `<div class="empty-cat">${esc(emptyLabel)}에 등록된 프로젝트가 없습니다.<br>
+      <button class="mini" onclick="addVenture('${addCategory}')">+ ${esc(emptyLabel)} 프로젝트 추가</button></div>`;
     return;
   }
   let activeId = data.activeVenture[storeKey];
   if(!items.find(v=>v.id===activeId)){ activeId = items[0].id; data.activeVenture[storeKey]=activeId; }
   const v = items.find(x=>x.id===activeId);
   const vi = data.ventures.indexOf(v);
-  const isNaver = v.category==='blog' && v.group==='naver';
+  const isNaver = v.category==='naverblog';
 
-  el.innerHTML = kwWidgetHtml + `
+  el.innerHTML = `
     <div class="card">
       <div class="card-head">
         <div>
@@ -1260,6 +1283,7 @@ function renderContentArea(){
       ${renderAdminPanel(v, vi)}
       ${isNaver ? renderAiPanel(v, vi) : ''}
     </div>
+    ${data.activeCategory === 'shorts' ? renderShortsTools() : ''}
   `;
   const inp = document.getElementById('todoInput');
   if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') addTodo(vi); });
@@ -1349,6 +1373,38 @@ function copyKeyword(text){
     .then(()=>alert('키워드가 복사되었습니다: ' + text))
     .catch(()=>alert('복사에 실패했습니다.'));
 }
+
+// ---------- 쇼핑쇼츠 외부 도구 임베드 (상품 선정 대시보드 / 벤치마킹) ----------
+let activeShortsTool = 'dashboard';
+const SHORTS_TOOLS = {
+  dashboard: {label:'🛒 상품 선정 대시보드', file:'shorts-dashboard.html'},
+  video: {label:'🎬 영상 만들기', file:'shorts-video.html'},
+  benchmark: {label:'📊 벤치마킹', file:'shorts-benchmark.html'},
+};
+function renderShortsTools(){
+  const tabs = Object.keys(SHORTS_TOOLS).map(k => `
+    <div class="preset-chip ${activeShortsTool===k?'active':''}" onclick="selectShortsTool('${k}')">${esc(SHORTS_TOOLS[k].label)}</div>
+  `).join('');
+  const tool = SHORTS_TOOLS[activeShortsTool];
+  return `
+    <div class="card" style="margin-top:14px;">
+      <div class="card-head">
+        <div class="card-title"><h3>${esc(tool.label)}</h3></div>
+        <a class="mini" href="${escAttr(tool.file)}" target="_blank" rel="noopener">새 탭에서 열기 ↗</a>
+      </div>
+      <div class="account-filter-bar">${tabs}</div>
+      <iframe src="${escAttr(tool.file)}" style="width:100%; height:820px; border:1px solid var(--border-soft); border-radius:8px; margin-top:8px;"></iframe>
+      <div style="font-size:11px;color:var(--text-faint);margin-top:6px;">
+        control-tower와 같은 폴더(레포)에 ${esc(Object.values(SHORTS_TOOLS).map(t=>t.file).join(', '))} 파일이 함께 있어야 화면이 뜹니다.
+      </div>
+    </div>
+  `;
+}
+function selectShortsTool(k){
+  activeShortsTool = k;
+  renderContentArea();
+}
+
 
 // ---------- admin login panel ----------
 function renderAdminPanel(v, vi){
@@ -1687,8 +1743,6 @@ function useGenAsRef(gi){
 }
 
 async function generateStudioImage(){
-  const key = data.settings.geminiApiKey;
-  if(!key){ alert('먼저 ⚙ API 설정에서 Gemini API 키를 입력하세요.'); toggleSettings(); return; }
   const subjInp = document.getElementById('genSubject');
   const subject = subjInp.value.trim();
   const preset = activePreset();
@@ -1697,38 +1751,10 @@ async function generateStudioImage(){
   if(preset && preset.prompt.trim()) fullPrompt += preset.prompt.trim();
   if(subject) fullPrompt += (fullPrompt ? '\n\n' : '') + subject;
   if(!fullPrompt && studioRefImages.length) fullPrompt = '이 이미지를 더 보기 좋게 개선해줘.';
-  const btn = document.getElementById('genStudioBtn');
-  btn.disabled = true; btn.textContent = '생성 중...';
-  try{
-    const model = data.settings.imageModel || 'gemini-3.1-flash-image';
-    const parts = [{text: fullPrompt}];
-    studioRefImages.forEach(r=>{
-      const match = r.dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/s);
-      if(match){ parts.push({ inline_data:{ mime_type: match[1], data: match[2] } }); }
-    });
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        contents:[{role:'user', parts}],
-        generationConfig:{ responseModalities:['IMAGE','TEXT'] }
-      })
-    });
-    const json = await res.json();
-    if(!res.ok){ throw new Error((json.error && json.error.message) || ('요청 실패 (' + res.status + ')')); }
-    const respParts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-    const imgPart = respParts.find(p=>p.inlineData);
-    if(!imgPart){
-      const refusalText = respParts.map(p=>p.text||'').join(' ').trim();
-      throw new Error(refusalText ? ('이미지 대신 다음 응답이 왔습니다: ' + refusalText.slice(0,200)) : '이미지가 반환되지 않았습니다. 내용을 조금 더 구체적으로 적어보세요.');
-    }
-    genGallery.unshift({ dataUrl:`data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`, prompt: subject || preset.name });
-    renderImageGenContent();
-  }catch(e){
-    alert('이미지 생성 실패: ' + e.message);
-  } finally {
-    const b = document.getElementById('genStudioBtn');
-    if(b){ b.disabled=false; b.textContent='이미지 생성'; }
-  }
+  const note = studioRefImages.length
+    ? '프롬프트가 복사되었습니다. Gemini 화면에서 붙여넣고, 원본 이미지도 다시 첨부(Ctrl+V 또는 업로드)해주세요.'
+    : null;
+  goToGeminiWeb(fullPrompt, note);
 }
 function downloadGenImage(gi){
   const g = genGallery[gi]; if(!g) return;
@@ -1948,38 +1974,10 @@ function copyWorkTitle(vi){
 
 async function generateTitle(vi){
   const v = data.ventures[vi];
-  const key = data.settings.geminiApiKey;
-  if(!key){ alert('먼저 ⚙ API 설정에서 Gemini API 키를 입력하세요.'); toggleSettings(); return; }
   const source = (v.workBody && v.workBody.trim()) || (document.getElementById('workTopic') ? document.getElementById('workTopic').value.trim() : v.workTopic);
   if(!source){ alert('먼저 글을 생성하거나 주제를 입력하세요.'); return; }
-  const btn = document.getElementById('genTitleBtn');
-  btn.disabled = true; btn.textContent = '생성 중...';
-  const sugEl = document.getElementById('titleSuggestions');
-  try{
-    const model = data.settings.textModel || 'gemini-2.5-flash';
-    const sysPrompt = '너는 네이버 블로그 제목 작성 전문가다. 주어진 글(또는 주제)에 어울리는 클릭을 부르는 한국어 제목 5개를 만들어라. 검색 키워드가 자연스럽게 포함되게 하고, 낚시성 과장은 피한다. 응답은 반드시 JSON 배열만 출력: ["제목1","제목2","제목3","제목4","제목5"]. 다른 텍스트나 백틱 없이.';
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        systemInstruction:{parts:[{text: sysPrompt}]},
-        contents:[{role:'user', parts:[{text: source.slice(0, 4000)}]}]
-      })
-    });
-    const json = await res.json();
-    if(!res.ok){ throw new Error((json.error && json.error.message) || ('요청 실패 (' + res.status + ')')); }
-    const respParts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-    let text = respParts.map(p=>p.text||'').join('\n').replace(/```json|```/g,'').trim();
-    const arrMatch = text.match(/\[[\s\S]*\]/);
-    if(!arrMatch) throw new Error('제목 결과를 해석하지 못했습니다. 다시 시도해주세요.');
-    const titles = JSON.parse(arrMatch[0]).filter(t=>typeof t==='string' && t.trim());
-    sugEl.innerHTML = titles.map(t=>`
-      <div class="preset-chip" style="margin-bottom:4px; display:flex;" onclick="pickTitle(${vi}, this.textContent)">${esc(t)}</div>
-    `).join('') + `<div style="font-size:11.5px;color:var(--text-faint);margin-top:4px;">마음에 드는 제목을 클릭하면 위 제목칸에 들어갑니다.</div>`;
-  }catch(e){
-    alert('제목 생성 실패: ' + e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = '제목 생성';
-  }
+  const sysPrompt = '너는 네이버 블로그 제목 작성 전문가다. 아래 글(또는 주제)에 어울리는 클릭을 부르는 한국어 제목 5개를 만들어라. 검색 키워드가 자연스럽게 포함되게 하고, 낚시성 과장은 피한다.\n\n';
+  goToGeminiWeb(sysPrompt + source.slice(0, 4000), '제목 생성 프롬프트가 복사되었습니다. Gemini에서 받은 제목 중 하나를 골라 제목칸에 직접 입력해주세요.');
 }
 function pickTitle(vi, title){
   data.ventures[vi].workTitle = title.trim();
@@ -1990,39 +1988,10 @@ function pickTitle(vi, title){
 
 async function generateThumbnail(vi){
   const v = data.ventures[vi];
-  const key = data.settings.geminiApiKey;
-  if(!key){ alert('먼저 ⚙ API 설정에서 Gemini API 키를 입력하세요.'); toggleSettings(); return; }
   const body = (v.workBody||'').trim();
   if(!body){ alert('먼저 글을 생성하세요. 생성된 글 내용을 바탕으로 썸네일을 만듭니다.'); return; }
-  const btn = document.getElementById('genThumbBtn');
-  btn.disabled = true; btn.textContent = '썸네일 생성 중...';
-  try{
-    const model = data.settings.imageModel || 'gemini-3.1-flash-image';
-    const thumbPrompt = '다음 블로그 글의 핵심 내용을 한눈에 표현하는 정사각형(1:1) 블로그 썸네일 이미지를 만들어줘. 밝고 깔끔한 스타일, 글자나 텍스트는 넣지 말 것.\n\n' + (v.workTitle ? '제목: ' + v.workTitle + '\n\n' : '') + '글 내용:\n' + body.slice(0, 3000);
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        contents:[{role:'user', parts:[{text: thumbPrompt}]}],
-        generationConfig:{ responseModalities:['IMAGE','TEXT'], imageConfig:{ aspectRatio:'1:1' } }
-      })
-    });
-    const json = await res.json();
-    if(!res.ok){ throw new Error((json.error && json.error.message) || ('요청 실패 (' + res.status + ')')); }
-    const respParts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-    const imgPart = respParts.find(p=>p.inlineData);
-    if(!imgPart) throw new Error('이미지가 반환되지 않았습니다. 다시 시도해주세요.');
-    const rawUrl = `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
-    const squared = await resizeToSquare(rawUrl, 1000);
-    if(!attachments[v.id]) attachments[v.id] = [];
-    attachments[v.id].push({ id:'a'+Date.now(), dataUrl:squared, name:'썸네일 1000x1000' });
-    renderContentArea();
-    alert('썸네일이 첨부 이미지에 추가되었습니다 (1000×1000).');
-  }catch(e){
-    alert('썸네일 생성 실패: ' + e.message);
-  } finally {
-    const b = document.getElementById('genThumbBtn');
-    if(b){ b.disabled=false; b.textContent='🖼 썸네일 자동 생성 (1000×1000)'; }
-  }
+  const thumbPrompt = '다음 블로그 글의 핵심 분위기를 표현하는 정사각형(1:1) 블로그 썸네일 이미지를 만들어줘. 부드럽고 자연스러운 킨포크(Kinfolk) 스타일 — 내추럴한 톤, 은은한 채광, 여백이 있는 미니멀한 구도. 제품 사진이나 상품 이미지는 넣지 말고, 분위기와 라이프스타일 위주로. 글자나 텍스트도 넣지 말 것.\n\n' + (v.workTitle ? '제목: ' + v.workTitle + '\n\n' : '') + '글 내용:\n' + body.slice(0, 3000);
+  goToGeminiWeb(thumbPrompt, '썸네일 프롬프트가 복사되었습니다. Gemini에서 이미지를 받은 뒤 다운로드해서 첨부 이미지 영역에 끌어다 놓으세요.');
 }
 function resizeToSquare(dataUrl, size){
   return new Promise((resolve, reject)=>{
@@ -2155,82 +2124,30 @@ function copyWorkBody(vi){
 
 async function generateText(vi){
   const v = data.ventures[vi];
-  const key = data.settings.geminiApiKey;
-  if(!key){ alert('먼저 ⚙ API 설정에서 Gemini API 키를 입력하세요.'); toggleSettings(); return; }
   const topicInp = document.getElementById('workTopic');
   const topic = topicInp.value.trim();
   const hasRefImages = (refImages[v.id]||[]).length > 0;
   if(!topic && !hasRefImages){ alert('주제를 입력하거나 참고 이미지를 첨부하세요.'); return; }
   v.workTopic = topic; save();
-  const btn = document.getElementById('genTextBtn');
-  btn.disabled = true; btn.textContent = '생성 중...';
-  try{
-    const model = data.settings.textModel || 'gemini-2.5-flash';
-    const parts = [{text: topic || '첨부한 이미지를 보고 어울리는 블로그 글을 작성해줘.'}];
-    // 참고 이미지가 있으면 함께 전송 (Gemini가 이미지를 보고 글 작성)
-    (refImages[v.id]||[]).forEach(r=>{
-      const match = r.dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/s);
-      if(match){ parts.push({ inline_data:{ mime_type: match[1], data: match[2] } }); }
-    });
-    const body = { contents:[{role:'user', parts}] };
-    if(v.prompt && v.prompt.trim()){ body.systemInstruction = {parts:[{text: v.prompt}]}; }
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
-    });
-    const json = await res.json();
-    if(!res.ok){ throw new Error((json.error && json.error.message) || ('요청 실패 (' + res.status + ')')); }
-    const respParts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-    const text = respParts.map(p=>p.text||'').join('\n').trim();
-    v.workBody = text || '(생성된 내용이 없습니다)';
-    save(); renderContentArea();
-  }catch(e){
-    alert('글 생성 실패: ' + e.message);
-  } finally {
-    const b = document.getElementById('genTextBtn');
-    if(b){ b.disabled=false; b.textContent='글 생성'; }
-  }
+  let fullPrompt = topic || '첨부한 이미지를 보고 어울리는 블로그 글을 작성해줘.';
+  if(v.prompt && v.prompt.trim()) fullPrompt = v.prompt.trim() + '\n\n' + fullPrompt;
+  const note = hasRefImages
+    ? '프롬프트가 복사되었습니다. Gemini 화면에서 붙여넣고, 참고 이미지도 다시 첨부(Ctrl+V 또는 업로드)해주세요. 완성된 글은 아래 본문칸에 붙여넣으세요.'
+    : '프롬프트가 복사되었습니다. Gemini에서 받은 글을 아래 본문칸에 붙여넣으세요.';
+  goToGeminiWeb(fullPrompt, note);
 }
 
 async function generateImage(vi){
   const v = data.ventures[vi];
-  const key = data.settings.geminiApiKey;
-  if(!key){ alert('먼저 ⚙ API 설정에서 Gemini API 키를 입력하세요.'); toggleSettings(); return; }
   const imgPromptInp = document.getElementById('imgPrompt');
   const prompt = (imgPromptInp.value.trim()) || v.workTopic || '';
   if(!prompt){ alert('이미지 프롬프트나 주제를 입력하세요.'); return; }
-  const btn = document.getElementById('genImgBtn');
-  btn.disabled = true; btn.textContent = '생성 중...';
-  try{
-    const model = data.settings.imageModel || 'gemini-3.1-flash-image';
-    const genParts = [{text: prompt}];
-    const useRefs = document.getElementById('imgUseRefs');
-    if(useRefs && useRefs.checked){
-      (refImages[v.id]||[]).forEach(r=>{
-        const match = r.dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/s);
-        if(match){ genParts.push({ inline_data:{ mime_type: match[1], data: match[2] } }); }
-      });
-    }
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        contents:[{role:'user', parts: genParts}],
-        generationConfig:{ responseModalities:['IMAGE','TEXT'] }
-      })
-    });
-    const json = await res.json();
-    if(!res.ok){ throw new Error((json.error && json.error.message) || ('요청 실패 (' + res.status + ')')); }
-    const parts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
-    const imgPart = parts.find(p=>p.inlineData);
-    if(!imgPart){ throw new Error('이미지가 반환되지 않았습니다. 프롬프트를 조금 더 구체적으로 적어보세요.'); }
-    const dataUrl = `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
-    imageCache[v.id] = dataUrl;
-    renderContentArea();
-  }catch(e){
-    alert('이미지 생성 실패: ' + e.message);
-  } finally {
-    const b = document.getElementById('genImgBtn');
-    if(b){ b.disabled=false; b.textContent='이미지 생성'; }
-  }
+  const useRefs = document.getElementById('imgUseRefs');
+  const hasRefs = useRefs && useRefs.checked && (refImages[v.id]||[]).length > 0;
+  const note = hasRefs
+    ? '프롬프트가 복사되었습니다. Gemini 화면에서 붙여넣고, 참고 이미지도 다시 첨부(Ctrl+V 또는 업로드)해주세요.'
+    : '프롬프트가 복사되었습니다. Gemini에서 받은 이미지를 다운로드해서 필요한 곳에 업로드하세요.';
+  goToGeminiWeb(prompt, note);
 }
 
 function cycleStatus(vi){
@@ -2280,10 +2197,9 @@ function renameVenture(vi){
   v.name = name.trim();
   save(); renderAll();
 }
-function addVenture(category, group){
+function addVenture(category){
   const catLabel = CATEGORIES.find(c=>c.id===category).label;
-  const label = group ? (BLOG_GROUPS.find(g=>g.id===group) ? BLOG_GROUPS.find(g=>g.id===group).label : catLabel) : catLabel;
-  showFormModal(`${label}에 프로젝트 추가`, [
+  showFormModal(`${catLabel}에 프로젝트 추가`, [
     {key:'name', label:'프로젝트 이름'},
     {key:'url', label:'사이트 URL (선택)'},
   ], (r)=>{
@@ -2291,20 +2207,125 @@ function addVenture(category, group){
     const id = 'v'+Date.now();
     const newV = { id, category, name:r.name.trim(), status:'ok', links:[], todos:[], note:'', adminUrl:'', adminId:'', adminPw:'', adminEmbedOpen:false, showPw:false };
     if(r.url.trim()) newV.links.push({label:'사이트', url:r.url.trim()});
-    if(category==='blog'){
-      newV.group = group || data.activeBlogGroup || 'blogspot';
-      if(newV.group === 'naver'){ newV.prompt=''; newV.workTopic=''; newV.workBody=''; newV.workTitle=''; }
-    }
+    if(category==='naverblog'){ newV.prompt=''; newV.workTopic=''; newV.workBody=''; newV.workTitle=''; }
     data.ventures.push(newV);
     data.activeCategory = category;
-    if(category==='blog'){ data.activeBlogGroup = newV.group; data.activeVenture['blog']=id; }
-    else data.activeVenture[category] = id;
+    data.activeVenture[category] = id;
     save(); renderAll();
   });
 }
 
+
+// ---------- AI 사업팀 (34 skills) ----------
+const AI_TEAM_SKILLS = [{"slug": "ai-operating-ceo", "team": "CEO", "title": "AI 운영 CEO", "subtitle": "대표 · 팀 배정 · 결과 통합", "prompt": "너는 내 사업의 AI 운영 CEO다. 아래 목표와 현재 자료를 먼저 확인하고, SEO·CRO·콘텐츠·광고·성장·세일즈·전략 7개 팀 중 필요한 팀만 골라라. 각 팀에 목표·입력 자료·마감·완료 조건을 배정하고, 결과를 우선순위가 있는 하나의 실행 계획으로 합쳐라. 확인되지 않은 수치나 사실은 만들지 말고, 꼭 필요한 자료가 빠졌으면 먼저 되물어라.\n\n[목표]\n{목표}\n\n[현재 자료]\n{현재 자료}"}, {"slug": "seo-audit", "team": "SEO & Content", "title": "검색 진단", "subtitle": "문제 찾기", "prompt": "우리 [사이트/페이지]의 SEO 문제를 기술·콘텐츠 관점으로 진단해줘. 영향도와 수정 난이도로 우선순위를 나누고, 근거와 바로 고칠 항목을 표로 정리해줘.\n\n[사이트/페이지]\n{사이트/페이지}"}, {"slug": "ai-seo", "team": "SEO & Content", "title": "AI 검색 최적화", "subtitle": "AI 답변 노출", "prompt": "[주제/브랜드]가 AI 검색 답변에 인용될 가능성을 높이도록 페이지를 점검해줘. 빠진 질문, 명확한 정의, 근거, 비교표, 출처 구조를 제안해줘.\n\n[주제/브랜드]\n{주제/브랜드}"}, {"slug": "site-architecture", "team": "SEO & Content", "title": "사이트 설계", "subtitle": "페이지 구조", "prompt": "[상품/주제] 사이트의 메뉴와 페이지 구조를 설계해줘. 고객이 찾는 순서와 검색 의도를 기준으로 상위·하위 페이지, 내부 링크, 각 페이지 역할을 정리해줘.\n\n[상품/주제]\n{상품/주제}"}, {"slug": "programmatic-seo", "team": "SEO & Content", "title": "대량 SEO", "subtitle": "검색 페이지 확장", "prompt": "[데이터/카테고리]로 반복 생성할 SEO 페이지 체계를 설계해줘. 공통 틀, 바뀌는 항목, 품질 기준, 중복 방지, 먼저 검증할 10개 페이지를 제안해줘.\n\n[데이터/카테고리]\n{데이터/카테고리}"}, {"slug": "schema-markup", "team": "SEO & Content", "title": "구조화 데이터", "subtitle": "검색엔진 이해", "prompt": "[페이지 내용]에 맞는 구조화 데이터 종류를 골라줘. 필수·권장 속성, 실제 값 예시, 검증 방법과 잘못 넣으면 안 되는 항목을 정리해줘.\n\n[페이지 내용]\n{페이지 내용}"}, {"slug": "content-strategy", "team": "SEO & Content", "title": "콘텐츠 전략", "subtitle": "주제와 발행", "prompt": "[고객/상품]을 위한 4주 콘텐츠 계획을 짜줘. 고객 질문을 단계별로 묶고, 주제·형식·핵심 메시지·다음 행동·재활용 방법까지 표로 정리해줘.\n\n[고객/상품]\n{고객/상품}"}, {"slug": "page-cro", "team": "CRO", "title": "랜딩 최적화", "subtitle": "페이지 전환", "prompt": "[랜딩페이지 문구/화면]을 방문자 관점에서 진단해줘. 첫 화면 이해, 신뢰, 반대 이유, 행동 버튼을 점검하고 전환 영향이 큰 수정안부터 제안해줘.\n\n[랜딩페이지 문구/화면]\n{랜딩페이지 문구/화면}"}, {"slug": "signup-flow-cro", "team": "CRO", "title": "가입 흐름", "subtitle": "가입 이탈", "prompt": "[가입 단계]에서 사용자가 멈출 이유를 찾아줘. 없앨 입력, 뒤로 미룰 질문, 안심 문구, 오류 안내, 단계별 측정 지표를 제안해줘.\n\n[가입 단계]\n{가입 단계}"}, {"slug": "onboarding-cro", "team": "CRO", "title": "첫 경험", "subtitle": "첫 가치 도달", "prompt": "[서비스] 신규 사용자가 가장 빨리 첫 가치를 느끼는 온보딩을 설계해줘. 첫 5분 행동, 안내 문구, 성공 기준, 막힐 지점과 후속 메시지를 정리해줘.\n\n[서비스]\n{서비스}"}, {"slug": "form-cro", "team": "CRO", "title": "신청폼", "subtitle": "문의 마찰", "prompt": "[문의/신청폼]의 각 항목이 꼭 필요한지 검토해줘. 삭제·선택·유지로 나누고, 완료율을 높일 순서·도움말·제출 후 화면을 제안해줘.\n\n[문의/신청폼]\n{문의/신청폼}"}, {"slug": "popup-cro", "team": "CRO", "title": "팝업", "subtitle": "이탈 전 행동", "prompt": "[페이지/제안]용 팝업을 설계해줘. 누구에게 언제 보여줄지, 한 문장 가치, 행동 버튼, 닫기 조건, 성과를 판단할 기준을 정리해줘.\n\n[페이지/제안]\n{페이지/제안}"}, {"slug": "paywall-upgrade-cro", "team": "CRO", "title": "결제 전환", "subtitle": "무료→유료", "prompt": "[무료 기능/요금제] 사용자가 결제할 이유를 설계해줘. 가치가 드러나는 순간, 제한 방식, 요금제 비교, 불안 해소, 업그레이드 문구를 제안해줘.\n\n[무료 기능/요금제]\n{무료 기능/요금제}"}, {"slug": "copywriting", "team": "Content & Copy", "title": "판매 문구", "subtitle": "처음부터 작성", "prompt": "[고객]에게 [상품]을 소개하는 판매 문구를 써줘. 문제·원하는 결과·차별점·근거·다음 행동 순서로 쓰고 과장되거나 확인 안 된 주장은 빼줘.\n\n[고객]\n{고객}\n\n[상품]\n{상품}"}, {"slug": "copy-editing", "team": "Content & Copy", "title": "카피 편집", "subtitle": "문장 다듬기", "prompt": "아래 문구를 의미는 유지하면서 더 짧고 선명하게 고쳐줘. 모호한 말, 중복, 과장, 어려운 표현을 표시하고 수정 전·후·수정 이유를 보여줘.\n\n[원문]\n{원문}"}, {"slug": "cold-email", "team": "Content & Copy", "title": "콜드메일", "subtitle": "첫 제안", "prompt": "[상대/회사]에게 보낼 첫 제안 메일을 써줘. 실제로 확인 가능한 개인화 한 줄, 상대 이익, 짧은 근거, 부담 없는 답장 질문을 넣고 120단어 안으로 써줘.\n\n[상대/회사]\n{상대/회사}"}, {"slug": "email-sequence", "team": "Content & Copy", "title": "이메일 흐름", "subtitle": "자동 후속", "prompt": "[가입/문의/구매] 뒤 보낼 이메일 5개를 설계해줘. 각 메일의 발송 시점, 목적, 제목, 핵심 내용, 행동 버튼과 중단 조건을 정리해줘.\n\n[가입/문의/구매]\n{가입/문의/구매}"}, {"slug": "social-content", "team": "Content & Copy", "title": "SNS 콘텐츠", "subtitle": "게시물 제작", "prompt": "[주제]를 [인스타/링크드인] 게시물로 바꿔줘. 첫 문장 훅, 핵심 3개, 구체 예시, 한 가지 행동 요청으로 구성하고 채널 말투에 맞춰줘.\n\n[주제]\n{주제}\n\n[인스타/링크드인]\n{인스타/링크드인}"}, {"slug": "lead-magnets", "team": "Content & Copy", "title": "리드 자료", "subtitle": "무료 자료", "prompt": "[고객]이 연락처를 남길 만큼 바로 쓸 수 있는 무료 자료를 기획해줘. 해결할 작은 문제, 자료 형식, 목차, 10분 안의 첫 성과, 유료 상품 연결을 정리해줘.\n\n[고객]\n{고객}"}, {"slug": "paid-ads", "team": "Paid Ads", "title": "광고 운영", "subtitle": "집행 구조", "prompt": "[상품/예산/목표]에 맞는 광고 운영안을 짜줘. 채널, 대상, 캠페인 구조, 예산 배분, 첫 2주 실험, 중단·확대 기준을 표로 정리해줘.\n\n[상품/예산/목표]\n{상품/예산/목표}"}, {"slug": "ad-creative", "team": "Paid Ads", "title": "광고 소재", "subtitle": "스크롤 정지", "prompt": "[고객 문제/상품 강점]으로 광고 소재 10개를 기획해줘. 훅, 첫 화면, 증거, 장면, 문구, 행동 버튼을 각기 다른 각도로 제안해줘.\n\n[고객 문제/상품 강점]\n{고객 문제/상품 강점}"}, {"slug": "ab-test-setup", "team": "Paid Ads", "title": "실험 설계", "subtitle": "승자 찾기", "prompt": "[페이지/광고]에서 한 번에 한 변수만 바꾸는 A/B 테스트를 설계해줘. 가설, A와 B, 주 지표, 보호 지표, 표본 판단, 종료 조건을 정리해줘.\n\n[페이지/광고]\n{페이지/광고}"}, {"slug": "analytics-tracking", "team": "Paid Ads", "title": "성과 추적", "subtitle": "데이터 연결", "prompt": "[고객 여정]의 클릭부터 전환까지 측정 계획을 만들어줘. 이벤트 이름, 발생 조건, 필수 속성, 확인 화면, 누락 검사와 주간 보고 지표를 정리해줘.\n\n[고객 여정]\n{고객 여정}"}, {"slug": "referral-program", "team": "Growth", "title": "추천 루프", "subtitle": "고객 추천", "prompt": "[상품] 고객이 자연스럽게 다른 고객을 초대하는 추천 구조를 설계해줘. 추천 순간, 양쪽 보상, 공유 문구, 부정 사용 방지, 측정 지표를 정리해줘.\n\n[상품]\n{상품}"}, {"slug": "free-tool-strategy", "team": "Growth", "title": "무료 도구", "subtitle": "유입 만들기", "prompt": "[고객]이 반복해서 쓸 무료 도구 아이디어 10개를 제안해줘. 입력, 즉시 결과, 검색 수요, 제작 난이도, 유료 상품 연결을 평가해 상위 3개를 골라줘.\n\n[고객]\n{고객}"}, {"slug": "churn-prevention", "team": "Growth", "title": "이탈 방지", "subtitle": "고객 유지", "prompt": "[서비스] 고객 이탈 신호를 정의하고 대응 흐름을 설계해줘. 위험 구간, 확인할 행동, 메시지, 도움, 혜택, 회복 여부를 볼 지표를 정리해줘.\n\n[서비스]\n{서비스}"}, {"slug": "revops", "team": "Sales & GTM", "title": "수익 운영", "subtitle": "데이터 연결", "prompt": "[마케팅→영업→결제] 흐름을 한 장으로 정리해줘. 단계 정의, 담당, 넘김 조건, 필수 데이터, 병목 지표, 주간 점검 회의를 설계해줘.\n\n[마케팅→영업→결제]\n{마케팅→영업→결제}"}, {"slug": "sales-enablement", "team": "Sales & GTM", "title": "세일즈 자료", "subtitle": "계약 지원", "prompt": "[상품/고객] 영업에 필요한 자료 목록을 정리하고 우선 제작할 3개를 써줘. 고객 질문, 핵심 답, 근거, 비교, 다음 행동이 들어가게 해줘.\n\n[상품/고객]\n{상품/고객}"}, {"slug": "launch-strategy", "team": "Sales & GTM", "title": "출시 전략", "subtitle": "시장 출시", "prompt": "[상품]의 4주 출시 계획을 만들어줘. 준비, 예열, 출시, 후속 단계별 목표·채널·콘텐츠·담당·성과 기준과 실패 시 수정안을 정리해줘.\n\n[상품]\n{상품}"}, {"slug": "pricing-strategy", "team": "Sales & GTM", "title": "가격 전략", "subtitle": "요금제 설계", "prompt": "[상품/고객/경쟁 가격]을 바탕으로 가격 가설을 세워줘. 가치 기준, 3개 요금제, 포함 기능, 구매 불안, 검증 인터뷰와 가격 실험을 제안해줘.\n\n[상품/고객/경쟁 가격]\n{상품/고객/경쟁 가격}"}, {"slug": "competitor-alternatives", "team": "Sales & GTM", "title": "경쟁 비교", "subtitle": "대안 페이지", "prompt": "[우리 상품]과 [경쟁/대안]을 공정하게 비교해줘. 적합한 고객, 강점, 약점, 비용, 전환 조건을 근거와 함께 정리하고 과장 없는 비교 페이지 초안을 써줘.\n\n[우리 상품]\n{우리 상품}\n\n[경쟁/대안]\n{경쟁/대안}"}, {"slug": "marketing-ideas", "team": "Strategy", "title": "마케팅 아이디어", "subtitle": "실행 후보", "prompt": "[목표/고객/예산/기간]에 맞는 마케팅 아이디어 20개를 내줘. 예상 효과, 비용, 속도, 필요한 자료로 평가하고 이번 주 실행할 상위 3개를 골라줘.\n\n[목표/고객/예산/기간]\n{목표/고객/예산/기간}"}, {"slug": "marketing-psychology", "team": "Strategy", "title": "고객 심리", "subtitle": "구매 이유", "prompt": "[상품/페이지]에 적용할 수 있는 고객 심리 원리를 골라줘. 왜 맞는지, 어디에 어떻게 쓸지, 조작적으로 보이지 않을 표현과 확인할 지표를 정리해줘.\n\n[상품/페이지]\n{상품/페이지}"}, {"slug": "customer-research", "team": "Strategy", "title": "고객 조사", "subtitle": "말과 행동 수집", "prompt": "[고객/문제]를 이해할 인터뷰 질문 12개를 만들어줘. 과거 행동 중심으로 묻고 유도 질문은 빼줘. 답변을 문제·계기·대안·불안·결정 기준으로 분석할 표도 만들어줘.\n\n[고객/문제]\n{고객/문제}"}];
+const AI_TEAM_TEAMS = ["CEO", "SEO & Content", "CRO", "Content & Copy", "Paid Ads", "Growth", "Sales & GTM", "Strategy"];
+const AI_TEAM_LABELS = {"CEO": "CEO", "SEO & Content": "SEO · 콘텐츠", "CRO": "CRO (전환)", "Content & Copy": "콘텐츠 · 카피", "Paid Ads": "광고", "Growth": "그로스", "Sales & GTM": "세일즈 · 출시", "Strategy": "전략"};
+let activeAiTeamTab = 'CEO';
+let openAiTeamSkillSlug = null;
+
+function renderAiTeamContent(){
+  const el = document.getElementById('contentArea');
+  const chips = AI_TEAM_TEAMS.map(t => `
+    <div class="preset-chip ${activeAiTeamTab===t?'active':''}" onclick="selectAiTeamTab('${t}')">${esc(AI_TEAM_LABELS[t])}</div>
+  `).join('');
+
+  const cards = AI_TEAM_SKILLS.filter(s=>s.team===activeAiTeamTab).map(s => {
+    return `
+    <div class="ai-team-card" onclick="openAiTeamSkill('${s.slug}')">
+      <div class="ai-team-card-tag">${esc(AI_TEAM_LABELS[s.team])}</div>
+      <h4>${esc(s.title)}</h4>
+      <p>${esc(s.subtitle)}</p>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title"><h3>💡 아이디어회의 · 34개 스킬</h3></div>
+      </div>
+      <div style="font-size:12px;color:var(--text-faint);">
+        CEO 1개 + 7개 팀 33개 전문 스킬. 카드를 눌러 빈칸을 채우고 "Gemini로 이동"을 누르면 프롬프트가 복사되고 무료 Gemini 웹이 열립니다. API 키·비용이 들지 않습니다.
+      </div>
+      <div class="account-filter-bar" style="margin-top:10px;">${chips}</div>
+      <div class="ai-team-grid">${cards || '<div class="empty-cat">이 팀에는 스킬이 없습니다.</div>'}</div>
+    </div>
+  `;
+}
+
+function selectAiTeamTab(team){
+  activeAiTeamTab = team;
+  renderAiTeamContent();
+}
+
+function aiTeamFields(promptTpl){
+  const seen = new Set(); const out = [];
+  const re = /\{([^}]+)\}/g;
+  let m;
+  while((m = re.exec(promptTpl))){ if(!seen.has(m[1])){ seen.add(m[1]); out.push(m[1]); } }
+  return out;
+}
+
+function openAiTeamSkill(slug){
+  const skill = AI_TEAM_SKILLS.find(s=>s.slug===slug);
+  if(!skill) return;
+  openAiTeamSkillSlug = slug;
+  const fields = aiTeamFields(skill.prompt);
+  const saved = data.aiTeamResults[slug];
+
+  const overlay = document.getElementById('modalOverlay');
+  const box = document.getElementById('modalBox');
+  box.innerHTML = `
+    <h3>${esc(skill.title)} <span style="font-size:12px;color:var(--text-faint);font-weight:400;">· ${esc(AI_TEAM_LABELS[skill.team])}</span></h3>
+    <div id="aiTeamFields">
+      ${fields.map(f => `
+        <div class="modal-field">
+          <label>${esc(f)}</label>
+          <textarea id="atf_${escAttr(f)}" placeholder="${escAttr(f)} 내용을 입력하세요">${esc((saved && saved.inputs && saved.inputs[f]) || '')}</textarea>
+        </div>
+      `).join('')}
+    </div>
+    <div style="font-size:11.5px;color:var(--text-faint);margin-bottom:4px;">누르면 빈칸이 채워진 프롬프트가 클립보드에 복사되고, Gemini 웹이 새 탭으로 열립니다.</div>
+    <div class="modal-actions">
+      <button class="mini" onclick="closeFormModal()">닫기</button>
+      <button class="mini violet" onclick="runAiTeamSkill('${escAttr(slug)}')">Gemini로 이동</button>
+    </div>
+  `;
+  overlay.classList.add('open');
+}
+
+function runAiTeamSkill(slug){
+  const skill = AI_TEAM_SKILLS.find(s=>s.slug===slug);
+  if(!skill) return;
+  const fields = aiTeamFields(skill.prompt);
+  const inputs = {};
+  let filled = skill.prompt;
+  fields.forEach(f => {
+    const el = document.getElementById('atf_'+f);
+    const val = (el ? el.value.trim() : '') || `(${f} 미입력)`;
+    inputs[f] = el ? el.value : '';
+    filled = filled.split('{'+f+'}').join(val);
+  });
+  data.aiTeamResults[slug] = { inputs, ts: Date.now() };
+  save();
+  goToGeminiWeb(filled, null);
+}
+
+
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escAttr(s){ return esc(s); }
+
+// ---------- Gemini 웹(무료) 이동 헬퍼 ----------
+// API 키를 쓰지 않고, 프롬프트를 클립보드에 복사한 뒤 gemini.google.com을 새 탭으로 엽니다.
+async function goToGeminiWeb(promptText, note){
+  try{
+    await navigator.clipboard.writeText(promptText);
+  }catch(e){
+    // 클립보드 복사가 막힌 환경이면 무시하고 이동만 진행
+  }
+  window.open('https://gemini.google.com/app', '_blank');
+  if(note) alert(note);
+  else alert('프롬프트가 클립보드에 복사되었습니다.\nGemini 화면에서 Ctrl+V(붙여넣기) 하세요.');
+}
 
 // ---------- generic multi-field form modal (replaces chained prompt()s) ----------
 let __modalSubmit = null;
@@ -2390,7 +2411,7 @@ document.addEventListener('paste', e=>{
   // 네이버블로그 글쓰기 카드가 열려있으면 참고 이미지로 추가
   const activeId = data.activeVenture[data.activeCategory];
   const v = data.ventures.find(x=>x.id===activeId);
-  if(v && v.category==='blog' && v.group==='naver'){
+  if(v && v.category==='naverblog'){
     e.preventDefault();
     handleRefFiles(files, v.id);
   }
@@ -2413,7 +2434,8 @@ async function boot(){
   // 원격 데이터를 반영한 뒤(또는 원격이 없어 로컬 데이터 그대로인 채로) 1회성 마이그레이션 수행
   const changed1 = migrateQuicklinksToAccounts();
   const changed2 = seedFreeKeywordTools();
-  if(changed1 || changed2){
+  const changed3 = migrateToFunctionMenu();
+  if(changed1 || changed2 || changed3){
     save(); // 여기서의 save()는 이미 원격 데이터를 받은 '이후'라 안전하게 push된다
   } else if(linkApplied){
     localStorage.setItem(STORAGE_KEY_V4, JSON.stringify(data));

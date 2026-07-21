@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>쇼핑쇼츠 벤치마킹 — 채널 성과 분석</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root{
+  --ink:#1c2333; --paper:#f7f5f0; --card:#fff;
+  --accent:#e8590c; --accent-soft:#fdf0e7;
+  --line:#e5e1d8; --muted:#8a8578; --ok:#1d9e75; --hot:#c2185b; --queue:#243b6b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
+header{background:var(--ink);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:19px;font-weight:700;letter-spacing:-.02em}
+header h1 span{color:#f5a623}
+.btn{border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:filter .15s}
+.btn:hover{filter:brightness(1.08)}
+.btn-main{background:var(--accent);color:#fff}
+.btn-ghost{background:rgba(255,255,255,.12);color:#fff}
+.btn-line{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
+
+.panel{background:var(--card);border-bottom:1px solid var(--line);padding:16px 28px;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row label{font-size:12.5px;color:var(--muted);font-weight:600;white-space:nowrap}
+input[type=text],input[type=password]{padding:9px 13px;border:1.5px solid var(--line);border-radius:8px;font-size:13.5px;font-family:inherit;background:var(--paper)}
+input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+#chan{flex:1;min-width:240px}
+#ytkey{flex:1;min-width:240px}
+
+.groups{display:flex;gap:8px;flex-wrap:wrap}
+.grp{padding:7px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);font-size:13px;font-weight:600;cursor:pointer;color:var(--muted)}
+.grp.on{background:var(--ink);border-color:var(--ink);color:#fff}
+
+.chips{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.chip{padding:6px 13px;border-radius:8px;border:1.5px solid var(--line);background:var(--paper);font-size:12.5px;font-weight:600;cursor:pointer;color:var(--muted)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.chanlist{display:flex;gap:8px;flex-wrap:wrap}
+.ctag{display:flex;align-items:center;gap:8px;background:var(--paper);border:1.5px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px}
+.ctag b{font-weight:600}
+.ctag small{color:var(--muted);font-size:11.5px}
+.ctag .x{cursor:pointer;color:var(--muted);font-weight:700;padding:0 2px}
+.ctag .x:hover{color:var(--hot)}
+
+.empty{padding:80px 28px;text-align:center;color:var(--muted)}
+.empty b{display:block;font-size:17px;color:var(--ink);margin-bottom:8px}
+.empty code{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:13px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;padding:22px 28px 60px}
+.vcard{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}
+.vcard:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(28,35,51,.1)}
+.thumb{position:relative;aspect-ratio:9/16;background:#111;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.idx{position:absolute;top:10px;left:10px;background:var(--hot);color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:7px}
+.idx.mid{background:var(--accent)}
+.idx.low{background:rgba(0,0,0,.55)}
+.dur{position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,.7);color:#fff;font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px}
+.vbody{padding:13px;display:flex;flex-direction:column;gap:7px;flex:1}
+.vtitle{font-size:13.5px;font-weight:600;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:39px}
+.vstat{font-size:12px;color:var(--muted)}
+.vstat b{color:var(--ink);font-weight:600}
+.vch{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.vacts{display:flex;gap:7px;margin-top:auto;padding-top:5px}
+.vacts .btn{flex:1;padding:8px 0;font-size:12px}
+
+.toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 22px;border-radius:999px;font-size:13.5px;font-weight:600;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60}
+.toast.show{opacity:1}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.note{font-size:12px;color:var(--muted);line-height:1.6}
+@media (prefers-reduced-motion:reduce){.vcard{transition:none}.spin{animation-duration:1.5s}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>쇼핑쇼츠 <span>벤치마킹</span></h1>
+  <div style="margin-left:auto;display:flex;gap:10px">
+    <button class="btn btn-ghost" onclick="exportGroups()">채널 목록 내보내기</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('impfile').click()">불러오기</button>
+    <input type="file" id="impfile" accept=".json" hidden onchange="importGroups(this.files[0])">
+    <button class="btn btn-main" onclick="refreshAll()">전체 갱신</button>
+  </div>
+</header>
+
+<div class="panel">
+  <div class="row">
+    <label for="ytkey">유튜브 API 키</label>
+    <input type="password" id="ytkey" placeholder="Google Cloud에서 발급 (무료 쿼터)" oninput="saveKey()">
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap">
+      <input type="checkbox" id="remember" onchange="toggleRemember()" style="cursor:pointer"> 키 기억하기
+    </label>
+    <span class="note">체크하면 이 브라우저에만 저장돼. 파일을 공유해도 키는 안 따라가.</span>
+  </div>
+
+  <div class="row">
+    <label>채널 그룹</label>
+    <div class="groups" id="groups"></div>
+    <button class="btn btn-line" style="padding:6px 12px;font-size:12.5px" onclick="addGroup()">+ 그룹 추가</button>
+  </div>
+
+  <div class="row">
+    <input type="text" id="chan" placeholder="채널 URL 또는 핸들 (@쇼핑채널, youtube.com/@xxx, 채널ID)">
+    <button class="btn btn-main" onclick="addChannel()">채널 추가</button>
+  </div>
+
+  <div class="chanlist" id="chanlist"></div>
+
+  <div class="row">
+    <label>정렬</label>
+    <div class="chips" id="sorts"></div>
+    <label style="margin-left:14px">떡상지수</label>
+    <div class="chips" id="hots"></div>
+    <label style="margin-left:14px">조회수</label>
+    <div class="chips" id="views"></div>
+    <span class="note" style="margin-left:auto" id="count"></span>
+  </div>
+</div>
+
+<div class="empty" id="empty">
+  <b>벤치마킹할 채널을 추가해봐</b>
+  유튜브 API 키를 넣고 채널을 등록하면, 최근 쇼츠들을 조회수·떡상지수로 정렬해서 보여줘.<br>
+  떡상지수 = 조회수 ÷ 구독자수 — 구독자 대비 얼마나 터졌는지를 보는 값이야.
+</div>
+
+<div class="grid" id="grid"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+let groups = {"쇼핑형": [], "이야기 쇼핑형": [], "인스타형": []};
+let activeGroup = "쇼핑형";
+let videos = [];
+let sortBy = "hot", hotMin = 0, viewMin = 0;
+
+const SORTS = [["hot","떡상순"],["views","조회순"],["date","최신순"]];
+const HOTS = [[0,"전체"],[1,"1x+"],[2,"2x+"],[3,"3x+"],[5,"5x+"],[10,"10x+"]];
+const VIEWS = [[0,"전체"],[10000,"1만+"],[50000,"5만+"],[100000,"10만+"],[500000,"50만+"]];
+
+function api(path, params, key){
+  const u = new URL("https://www.googleapis.com/youtube/v3/" + path);
+  Object.entries({...params, key}).forEach(([k,v]) => u.searchParams.set(k, v));
+  return fetch(u).then(async r => {
+    if(!r.ok){ const e = await r.json().catch(()=>({})); throw new Error(e?.error?.message || ("HTTP "+r.status)); }
+    return r.json();
+  });
+}
+
+function parseHandle(s){
+  s = s.trim();
+  const m = s.match(/youtube\.com\/(@[\w.\-가-힣]+)/i);
+  if(m) return {type:"handle", v:m[1]};
+  const c = s.match(/youtube\.com\/channel\/(UC[\w\-]+)/i);
+  if(c) return {type:"id", v:c[1]};
+  if(s.startsWith("@")) return {type:"handle", v:s};
+  if(/^UC[\w\-]{20,}$/.test(s)) return {type:"id", v:s};
+  return {type:"search", v:s};
+}
+
+async function addChannel(){
+  const key = document.getElementById('ytkey').value.trim();
+  const raw = document.getElementById('chan').value.trim();
+  if(!key){ showToast('유튜브 API 키를 먼저 넣어줘'); return; }
+  if(!raw){ showToast('채널 URL이나 핸들을 입력해줘'); return; }
+  const p = parseHandle(raw);
+  try{
+    let ch;
+    if(p.type === "handle"){
+      const r = await api("channels", {part:"snippet,statistics,contentDetails", forHandle:p.v}, key);
+      ch = r.items?.[0];
+    } else if(p.type === "id"){
+      const r = await api("channels", {part:"snippet,statistics,contentDetails", id:p.v}, key);
+      ch = r.items?.[0];
+    } else {
+      const s = await api("search", {part:"snippet", q:p.v, type:"channel", maxResults:1}, key);
+      const id = s.items?.[0]?.snippet?.channelId || s.items?.[0]?.id?.channelId;
+      if(id){
+        const r = await api("channels", {part:"snippet,statistics,contentDetails", id}, key);
+        ch = r.items?.[0];
+      }
+    }
+    if(!ch) throw new Error("채널을 못 찾음");
+    const item = {
+      id: ch.id,
+      name: ch.snippet.title,
+      subs: parseInt(ch.statistics.subscriberCount || "0"),
+      uploads: ch.contentDetails.relatedPlaylists.uploads,
+    };
+    if(groups[activeGroup].some(c => c.id === item.id)){ showToast('이미 추가된 채널이야'); return; }
+    groups[activeGroup].push(item);
+    document.getElementById('chan').value = '';
+    renderChannels();
+    showToast(item.name + ' 추가됨');
+  }catch(e){ showToast('채널 추가 실패: ' + e.message); }
+}
+
+function renderGroups(){
+  document.getElementById('groups').innerHTML = Object.keys(groups).map(g =>
+    `<button class="grp ${g===activeGroup?'on':''}" onclick="setGroup('${g.replace(/'/g,"\\'")}')">${g} <small style="opacity:.7">${groups[g].length}</small></button>`).join('');
+}
+function setGroup(g){ activeGroup = g; renderGroups(); renderChannels(); }
+function addGroup(){
+  const n = prompt('새 그룹 이름');
+  if(!n || groups[n]) return;
+  groups[n] = []; activeGroup = n; renderGroups(); renderChannels();
+}
+
+function renderChannels(){
+  const list = groups[activeGroup] || [];
+  document.getElementById('chanlist').innerHTML = list.map((c,i) =>
+    `<div class="ctag"><b>${c.name}</b><small>구독 ${fmtNum(c.subs)}</small><span class="x" onclick="delChannel(${i})">×</span></div>`).join('')
+    || '<span class="note">이 그룹엔 아직 채널이 없어.</span>';
+}
+function delChannel(i){ groups[activeGroup].splice(i,1); renderChannels(); }
+
+async function refreshAll(){
+  const key = document.getElementById('ytkey').value.trim();
+  const list = groups[activeGroup] || [];
+  if(!key){ showToast('유튜브 API 키를 먼저 넣어줘'); return; }
+  if(!list.length){ showToast('채널을 먼저 추가해줘'); return; }
+  const btn = event?.target;
+  if(btn){ btn.innerHTML = '<span class="spin"></span>불러오는 중'; btn.disabled = true; }
+  videos = [];
+  try{
+    for(const ch of list){
+      const pl = await api("playlistItems", {part:"contentDetails", playlistId:ch.uploads, maxResults:20}, key);
+      const ids = (pl.items||[]).map(x => x.contentDetails.videoId).join(",");
+      if(!ids) continue;
+      const vs = await api("videos", {part:"snippet,statistics,contentDetails", id:ids}, key);
+      for(const v of (vs.items||[])){
+        const dur = isoDur(v.contentDetails.duration);
+        if(dur > 90) continue;                    // 쇼츠만
+        const views = parseInt(v.statistics.viewCount || "0");
+        videos.push({
+          id: v.id, title: v.snippet.title,
+          thumb: v.snippet.thumbnails?.medium?.url || "",
+          views, dur,
+          date: v.snippet.publishedAt.slice(0,10),
+          ch: ch.name, subs: ch.subs,
+          hot: ch.subs ? views / ch.subs : 0,
+        });
+      }
+    }
+    render();
+    showToast(videos.length + '개 쇼츠 불러옴');
+  }catch(e){ showToast('불러오기 실패: ' + e.message); }
+  finally{ if(btn){ btn.innerHTML = '전체 갱신'; btn.disabled = false; } }
+}
+
+function isoDur(s){
+  const m = s.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
+  return (parseInt(m?.[1]||0))*60 + parseInt(m?.[2]||0);
+}
+function fmtNum(n){
+  if(n >= 100000000) return (n/100000000).toFixed(1)+'억';
+  if(n >= 10000) return (n/10000).toFixed(1)+'만';
+  if(n >= 1000) return (n/1000).toFixed(1)+'천';
+  return String(n);
+}
+
+function buildChips(){
+  document.getElementById('sorts').innerHTML = SORTS.map(([k,l]) =>
+    `<button class="chip ${sortBy===k?'on':''}" onclick="sortBy='${k}';buildChips();render()">${l}</button>`).join('');
+  document.getElementById('hots').innerHTML = HOTS.map(([v,l]) =>
+    `<button class="chip ${hotMin===v?'on':''}" onclick="hotMin=${v};buildChips();render()">${l}</button>`).join('');
+  document.getElementById('views').innerHTML = VIEWS.map(([v,l]) =>
+    `<button class="chip ${viewMin===v?'on':''}" onclick="viewMin=${v};buildChips();render()">${l}</button>`).join('');
+}
+
+function render(){
+  let list = videos.filter(v => v.hot >= hotMin && v.views >= viewMin);
+  list.sort((a,b) => sortBy==='views' ? b.views-a.views
+                   : sortBy==='date'  ? b.date.localeCompare(a.date)
+                   : b.hot-a.hot);
+  document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+  document.getElementById('count').textContent = list.length ? list.length + '개 표시 중' : '';
+  document.getElementById('grid').innerHTML = list.map(v => {
+    const cls = v.hot >= 5 ? '' : v.hot >= 2 ? 'mid' : 'low';
+    return `<div class="vcard">
+      <div class="thumb">
+        ${v.thumb ? `<img src="${v.thumb}" alt="" loading="lazy">` : ''}
+        <span class="idx ${cls}">${v.hot.toFixed(1)}x</span>
+        <span class="dur">0:${String(v.dur).padStart(2,'0')}</span>
+      </div>
+      <div class="vbody">
+        <div class="vtitle">${escapeHtml(v.title)}</div>
+        <div class="vstat">조회 <b>${fmtNum(v.views)}</b> · 구독 ${fmtNum(v.subs)}</div>
+        <div class="vch">${escapeHtml(v.ch)} · ${v.date}</div>
+        <div class="vacts">
+          <button class="btn btn-line" onclick="window.open('https://youtube.com/shorts/${v.id}','_blank')">영상 보기</button>
+          <button class="btn btn-line" onclick="copyTitle('${v.id}')">제목 복사</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function copyTitle(id){
+  const v = videos.find(x => x.id === id);
+  navigator.clipboard.writeText(v.title).then(()=>showToast('제목 복사됨'));
+}
+
+function exportGroups(){
+  const blob = new Blob([JSON.stringify(groups,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'benchmark_channels.json'; a.click();
+  showToast('채널 목록 저장됨');
+}
+function importGroups(file){
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try{
+      groups = JSON.parse(e.target.result);
+      activeGroup = Object.keys(groups)[0];
+      renderGroups(); renderChannels();
+      showToast('채널 목록 불러옴');
+    }catch(err){ showToast('파일을 읽지 못했어'); }
+  };
+  r.readAsText(file,'utf-8');
+}
+
+const KEY_STORE='shorts_yt_key';
+function toggleRemember(){
+  const on=document.getElementById('remember').checked;
+  try{ on ? saveKey() : localStorage.removeItem(KEY_STORE); }
+  catch(e){ showToast('이 브라우저에선 저장이 안 돼'); }
+}
+function saveKey(){
+  const box=document.getElementById('remember');
+  if(!box || !box.checked) return;
+  try{ localStorage.setItem(KEY_STORE, document.getElementById('ytkey').value.trim()); }catch(e){}
+}
+function loadKey(){
+  try{
+    const v=localStorage.getItem(KEY_STORE);
+    if(v){ document.getElementById('ytkey').value=v; document.getElementById('remember').checked=true; }
+  }catch(e){}
+}
+
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'),2400);
+}
+
+loadKey(); renderGroups(); renderChannels(); buildChips();
+</script>
+</body>
+</html>

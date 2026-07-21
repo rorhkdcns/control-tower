@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>쇼핑쇼츠 영상 만들기 — 보이스 + 자막 + 합성</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root{
+  --ink:#1c2333; --paper:#f7f5f0; --card:#fff;
+  --accent:#e8590c; --accent-soft:#fdf0e7;
+  --line:#e5e1d8; --muted:#8a8578; --ok:#1d9e75; --queue:#243b6b; --warn:#c62828;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
+header{background:var(--ink);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:19px;font-weight:700;letter-spacing:-.02em}
+header h1 span{color:#f5a623}
+.wrap{padding:22px 28px 80px;display:flex;flex-direction:column;gap:18px;max-width:900px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.card h2{font-size:14.5px;font-weight:700}
+.card .hint{font-size:12px;color:var(--muted);line-height:1.6}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row label{font-size:12.5px;color:var(--muted);font-weight:600;white-space:nowrap;min-width:80px}
+input[type=text],input[type=password],input[type=number],select{
+  padding:9px 13px;border:1.5px solid var(--line);border-radius:8px;font-size:13.5px;font-family:inherit;background:var(--paper);flex:1;min-width:160px;
+}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:26px;text-align:center;color:var(--muted);font-size:13px;cursor:pointer;transition:.15s}
+.drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.btn{border:none;border-radius:8px;padding:10px 18px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;transition:filter .15s}
+.btn:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-main{background:var(--accent);color:#fff}
+.btn-line{background:var(--paper);color:var(--ink);border:1.5px solid var(--line)}
+.sceneinfo{font-size:13px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:none;flex-direction:column;gap:4px}
+.sceneinfo.show{display:flex}
+.sceneinfo b{color:var(--accent)}
+.log{background:#12161f;color:#c9d1d9;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.65;border-radius:10px;padding:14px 16px;height:220px;overflow-y:auto;white-space:pre-wrap;display:none}
+.log.show{display:block}
+.log .err{color:#ff7b72}
+.log .ok{color:#7ee787}
+.progress-wrap{display:none;flex-direction:column;gap:6px}
+.progress-wrap.show{display:flex}
+.progress-bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width .2s}
+.progress-label{font-size:12px;color:var(--muted)}
+.result{display:none;flex-direction:column;gap:10px;align-items:flex-start}
+.result.show{display:flex}
+.result video{width:100%;max-width:320px;border-radius:10px;border:1px solid var(--line);background:#000}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;background:var(--accent-soft);color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>쇼핑쇼츠 <span>영상 만들기</span></h1>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>① scenes_*.json 불러오기</h2>
+    <div class="hint">상품 선정 대시보드에서 대본 생성 후 "장면 JSON 저장"으로 받은 파일을 넣으세요.</div>
+    <div class="drop" id="drop" onclick="document.getElementById('scenefile').click()">파일을 여기로 끌어놓거나 클릭해서 선택 (scenes_*.json)</div>
+    <input type="file" id="scenefile" accept=".json" hidden onchange="handleSceneFile(this.files[0])">
+    <div class="sceneinfo" id="sceneinfo"></div>
+  </div>
+
+  <div class="card">
+    <h2>② 보이스 설정 (Gemini TTS)</h2>
+    <div class="hint">이 파이프라인은 유료 Gemini API를 그대로 사용합니다 (제어탑 다른 메뉴와 달리 이 도구는 자동화가 목적이라 API 호출을 씁니다). 열 때마다 키를 다시 입력해야 하며 저장되지 않습니다.</div>
+    <div class="row">
+      <label for="gemkey">Gemini API 키</label>
+      <input type="password" id="gemkey" placeholder="열 때마다 붙여넣기 (저장 안 됨)">
+    </div>
+    <div class="row">
+      <label for="ttsmodel">TTS 모델</label>
+      <input type="text" id="ttsmodel" value="gemini-2.5-flash-preview-tts" placeholder="모델명이 바뀌었다면 여기서 수정">
+    </div>
+    <div class="row">
+      <label for="voice">보이스</label>
+      <select id="voice">
+        <option value="Kore">Kore (차분한 여성)</option>
+        <option value="Puck">Puck (밝은 남성)</option>
+        <option value="Aoede">Aoede (부드러운 여성)</option>
+        <option value="Charon">Charon (중저음 남성)</option>
+        <option value="Zephyr">Zephyr (경쾌한 여성)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>③ 영상 설정</h2>
+    <div class="row">
+      <label for="bgmode">배경</label>
+      <select id="bgmode">
+        <option value="auto">상품 이미지 자동 사용 (실패 시 그라디언트로 대체)</option>
+        <option value="gradient">항상 그라디언트만 사용</option>
+      </select>
+    </div>
+    <div class="hint">상품 이미지는 쿠팡 CDN 접근 제한(CORS)으로 불러오지 못할 수 있습니다 — 그 경우 자동으로 그라디언트 배경으로 대체됩니다.</div>
+  </div>
+
+  <div class="card">
+    <button class="btn btn-main" id="genBtn" onclick="generateVideo()" disabled>🎬 영상 생성 시작</button>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel"></div>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div class="card result" id="result">
+    <span class="badge">완성</span>
+    <video id="resultVideo" controls playsinline></video>
+    <button class="btn btn-line" id="downloadBtn">MP4 다운로드</button>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+<script>
+let sceneData = null; // 전체 payload from scenes_*.json
+let ffmpeg = null;
+let ffmpegLoaded = false;
+
+const drop = document.getElementById('drop');
+drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', ()=>drop.classList.remove('over'));
+drop.addEventListener('drop', e=>{
+  e.preventDefault(); drop.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if(f) handleSceneFile(f);
+});
+
+function handleSceneFile(file){
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = e=>{
+    try{
+      sceneData = JSON.parse(e.target.result);
+      if(!sceneData.scenes || !sceneData.scenes.length) throw new Error('scenes 배열이 비어있습니다');
+      const info = document.getElementById('sceneinfo');
+      info.classList.add('show');
+      info.innerHTML = `
+        <div><b>${esc(sceneData.product?.name || '(상품명 없음)')}</b></div>
+        <div>스토리: ${esc(sceneData.story||'-')} · 길이: ${esc(String(sceneData.length_sec||'-'))}초 · 장면 ${sceneData.scenes.length}개</div>
+        <div>이미지: ${sceneData.product?.image ? esc(sceneData.product.image) : '(없음 — 그라디언트 배경으로 진행)'}</div>
+      `;
+      document.getElementById('genBtn').disabled = false;
+    }catch(err){
+      alert('scenes JSON을 읽지 못했습니다: ' + err.message);
+    }
+  };
+  r.readAsText(file, 'utf-8');
+}
+
+function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function log(msg, cls){
+  const el = document.getElementById('log');
+  el.classList.add('show');
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function setProgress(pct, label){
+  document.getElementById('progressWrap').classList.add('show');
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = label || '';
+}
+
+async function ensureFfmpeg(){
+  if(ffmpegLoaded) return;
+  log('ffmpeg.wasm 불러오는 중 (처음 한 번, 20~30MB)...');
+  const { createFFmpeg } = FFmpeg;
+  ffmpeg = createFFmpeg({
+    log: false,
+    corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+  });
+  await ffmpeg.load();
+  ffmpegLoaded = true;
+  log('ffmpeg.wasm 준비 완료', 'ok');
+}
+
+function base64ToUint8(b64){
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+async function synthesizeTTS(text, apiKey, model, voiceName){
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      contents:[{parts:[{text}]}],
+      generationConfig:{
+        responseModalities:['AUDIO'],
+        speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName } } }
+      }
+    })
+  });
+  const json = await res.json();
+  if(!res.ok) throw new Error((json.error && json.error.message) || ('HTTP '+res.status));
+  const parts = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts) || [];
+  const part = parts.find(p=>p.inlineData);
+  if(!part) throw new Error('오디오가 반환되지 않았습니다 (모델명을 확인하세요)');
+  const mime = part.inlineData.mimeType || '';
+  const rateMatch = mime.match(/rate=(\d+)/);
+  const sampleRate = rateMatch ? parseInt(rateMatch[1]) : 24000;
+  const pcmBytes = base64ToUint8(part.inlineData.data);
+  return { pcmBytes, sampleRate };
+}
+
+// Pretendard 웹폰트가 로드된 상태에서 캔버스에 자막을 그려 투명 PNG로 반환
+async function makeSubtitlePng(text){
+  try{ await document.fonts.load('800 56px Pretendard'); }catch(e){}
+  const W = 1080, H = 1920;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  const fontSize = 56;
+  ctx.font = `800 ${fontSize}px Pretendard, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // 줄바꿈 처리 (자막이 길면 2줄)
+  const maxWidth = W - 140;
+  const words = String(text).split(' ');
+  const lines = [];
+  let cur = '';
+  words.forEach(w=>{
+    const test = cur ? cur + ' ' + w : w;
+    if(ctx.measureText(test).width > maxWidth && cur){ lines.push(cur); cur = w; }
+    else cur = test;
+  });
+  if(cur) lines.push(cur);
+  const finalLines = lines.slice(0,3);
+
+  const lineHeight = fontSize * 1.35;
+  const boxHeight = finalLines.length * lineHeight + 60;
+  const boxY = H - 420 - boxHeight;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  roundRect(ctx, 50, boxY, W-100, boxHeight, 20);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 6;
+  finalLines.forEach((line, i)=>{
+    const y = boxY + 30 + lineHeight*i + lineHeight/2;
+    ctx.strokeText(line, W/2, y);
+    ctx.fillText(line, W/2, y);
+  });
+
+  return new Promise(resolve=>canvas.toBlob(b=>resolve(b), 'image/png'));
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+// 그라디언트 배경(상품 이미지가 없거나 CORS로 못 가져올 때 대체용)
+function makeGradientBg(seedText){
+  const W=1080, H=1920;
+  const canvas = document.createElement('canvas');
+  canvas.width=W; canvas.height=H;
+  const ctx = canvas.getContext('2d');
+  let hash=0; for(let i=0;i<String(seedText).length;i++) hash = (hash*31 + seedText.charCodeAt(i))|0;
+  const h1 = Math.abs(hash) % 360;
+  const h2 = (h1 + 45) % 360;
+  const grad = ctx.createLinearGradient(0,0,W,H);
+  grad.addColorStop(0, `hsl(${h1},65%,42%)`);
+  grad.addColorStop(1, `hsl(${h2},70%,28%)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+  return new Promise(resolve=>canvas.toBlob(b=>resolve(b),'image/jpeg',0.92));
+}
+
+async function tryFetchImage(url){
+  try{
+    const res = await fetch(url, {mode:'cors'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return await res.blob();
+  }catch(e){
+    return null;
+  }
+}
+
+async function generateVideo(){
+  if(!sceneData) return;
+  const apiKey = document.getElementById('gemkey').value.trim();
+  if(!apiKey){ alert('Gemini API 키를 입력하세요.'); return; }
+  const model = document.getElementById('ttsmodel').value.trim() || 'gemini-2.5-flash-preview-tts';
+  const voiceName = document.getElementById('voice').value;
+  const bgMode = document.getElementById('bgmode').value;
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('log').innerHTML = '';
+  log('시작합니다...');
+
+  try{
+    await ensureFfmpeg();
+
+    let bgBlob = null;
+    if(bgMode === 'auto' && sceneData.product && sceneData.product.image){
+      log('상품 이미지 가져오는 중...');
+      bgBlob = await tryFetchImage(sceneData.product.image);
+      if(bgBlob) log('상품 이미지 사용', 'ok');
+      else log('상품 이미지를 가져오지 못했습니다 (CORS 등) — 그라디언트로 대체합니다.', 'err');
+    }
+    if(!bgBlob){
+      bgBlob = await makeGradientBg(sceneData.product?.name || 'shorts');
+    }
+    const bgBytes = new Uint8Array(await bgBlob.arrayBuffer());
+    ffmpeg.FS('writeFile', 'bg.jpg', bgBytes);
+
+    const scenes = sceneData.scenes;
+    const segFiles = [];
+
+    for(let i=0;i<scenes.length;i++){
+      const scene = scenes[i];
+      setProgress(Math.round((i/scenes.length)*90), `장면 ${i+1}/${scenes.length} — 보이스 생성 중`);
+      log(`[장면 ${i+1}] 보이스 생성: "${scene.narration.slice(0,30)}..."`);
+
+      const { pcmBytes, sampleRate } = await synthesizeTTS(scene.narration, apiKey, model, voiceName);
+      const durationSec = Math.max(1.2, pcmBytes.length / 2 / sampleRate);
+      log(`[장면 ${i+1}] 보이스 길이: ${durationSec.toFixed(1)}초`, 'ok');
+
+      ffmpeg.FS('writeFile', `audio_${i}.pcm`, pcmBytes);
+
+      log(`[장면 ${i+1}] 자막 이미지 생성 중...`);
+      const subBlob = await makeSubtitlePng(scene.subtitle || scene.narration.slice(0,20));
+      ffmpeg.FS('writeFile', `sub_${i}.png`, new Uint8Array(await subBlob.arrayBuffer()));
+
+      setProgress(Math.round((i/scenes.length)*90)+5, `장면 ${i+1}/${scenes.length} — 영상 합성 중`);
+      log(`[장면 ${i+1}] 영상 합성 중 (ffmpeg)...`);
+
+      const fps = 25;
+      const totalFrames = Math.round(fps * durationSec);
+      const segName = `seg_${i}.mp4`;
+
+      await ffmpeg.run(
+        '-loop','1','-i','bg.jpg',
+        '-i',`sub_${i}.png`,
+        '-f','s16le','-ar', String(sampleRate), '-ac','1','-i',`audio_${i}.pcm`,
+        '-filter_complex',
+        `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0018,1.18)':d=${totalFrames}:s=1080x1920:fps=${fps}[bg];[bg][1:v]overlay=0:0[v]`,
+        '-map','[v]','-map','2:a',
+        '-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-b:a','128k',
+        '-t', durationSec.toFixed(2),
+        '-shortest',
+        segName
+      );
+      segFiles.push(segName);
+      log(`[장면 ${i+1}] 완료`, 'ok');
+    }
+
+    setProgress(95, '전체 장면 이어붙이는 중...');
+    log('모든 장면을 하나로 합치는 중...');
+    const listContent = segFiles.map(f=>`file '${f}'`).join('\n');
+    ffmpeg.FS('writeFile', 'list.txt', listContent);
+    await ffmpeg.run('-f','concat','-safe','0','-i','list.txt','-c','copy','final.mp4');
+
+    const data = ffmpeg.FS('readFile', 'final.mp4');
+    const videoBlob = new Blob([data.buffer], {type:'video/mp4'});
+    const url = URL.createObjectURL(videoBlob);
+
+    setProgress(100, '완료');
+    log('영상 생성 완료!', 'ok');
+
+    const video = document.getElementById('resultVideo');
+    video.src = url;
+    document.getElementById('result').classList.add('show');
+    const dlBtn = document.getElementById('downloadBtn');
+    dlBtn.onclick = ()=>{
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'shorts_' + Date.now() + '.mp4';
+      a.click();
+    };
+  }catch(e){
+    log('오류 발생: ' + e.message, 'err');
+    alert('영상 생성 중 오류가 발생했습니다: ' + e.message + '\n로그를 확인하세요.');
+  }finally{
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
