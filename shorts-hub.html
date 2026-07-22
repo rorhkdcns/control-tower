@@ -72,7 +72,7 @@
       </div>
     </header>
     <div class="frame-wrap">
-      <iframe id="frame-dashboard" class="active" src="shorts-dashboard.html"></iframe>
+      <iframe id="frame-dashboard" class="active" src="shorts-dashboard.html" data-loaded="1"></iframe>
       <iframe id="frame-video" src=""></iframe>
       <iframe id="frame-benchmark" src=""></iframe>
     </div>
@@ -87,8 +87,9 @@
       document.querySelectorAll('iframe').forEach(f => f.classList.remove('active'));
       const targetFrame = document.getElementById(targetId);
 
-      if (!targetFrame.src || targetFrame.src === 'about:blank') {
+      if (!targetFrame.dataset.loaded) {
         targetFrame.src = btn.dataset.src;
+        targetFrame.dataset.loaded = '1';
       } else {
         // 이미 로드된 탭이면, 방금 넘어온 데이터가 있는지 다시 확인하라고 알려줌
         try { targetFrame.contentWindow.postMessage({ type: 'shorts-tab-focus' }, '*'); } catch(e) {}
