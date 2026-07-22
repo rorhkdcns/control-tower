@@ -212,6 +212,7 @@ header h1 span{color:#f5a623}
     <div class="modal-actions">
       <button class="btn btn-cancel" onclick="closeModal()">닫기</button>
       <button class="btn btn-cancel" id="btn-save-scenes" style="display:none" onclick="saveScenes()">장면 JSON 저장</button>
+      <button class="btn btn-gen" id="btn-send-video" style="display:none" onclick="sendToVideoTool()">영상 만들기로 바로 이동 →</button>
       <button class="btn btn-gen" id="btn-gen" onclick="generateScript()">스토리 대본 생성</button>
     </div>
   </div>
@@ -370,6 +371,7 @@ function openScriptModal(id){
   document.getElementById('modal-pinfo').textContent=`${p.name} · ${fmt(p.price)}원 · ${p.cat}`;
   document.getElementById('script-out').classList.remove('show');
   document.getElementById('btn-save-scenes').style.display='none';
+  document.getElementById('btn-send-video').style.display='none';
   document.getElementById('post-gen').style.display='none';
   hooks=[]; selHook=-1;
   document.getElementById('fact').classList.remove('show');
@@ -458,6 +460,7 @@ async function generateScript(){
     }));
     renderScenes();
     document.getElementById('btn-save-scenes').style.display='inline-block';
+    document.getElementById('btn-send-video').style.display='inline-block';
     document.getElementById('post-gen').style.display='flex';
     if(!document.getElementById('ch-title').value) document.getElementById('ch-title').value=scenes[0].subtitle||'';
     showToast(scenes.length+'개 장면 생성 완료');
@@ -611,10 +614,10 @@ function pickHook(i){
 
 function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function saveScenes(){
+function buildScenePayload(){
   const p=products[modalProductId];
   const s=STORIES.find(x=>x.id===selStory);
-  const payload={
+  return {
     product:{name:p.name,price:p.price,image:p.img,link:p.link,category:p.cat},
     story:s.name, length_sec:selLen,
     channel:{
@@ -627,12 +630,29 @@ function saveScenes(){
     },
     scenes:scenes
   };
+}
+
+function saveScenes(){
+  const payload=buildScenePayload();
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download='scenes_'+Date.now()+'.json';
   a.click();
   showToast('장면 JSON 저장됨 — 영상 생성 입력 파일');
+}
+
+function sendToVideoTool(){
+  const payload=buildScenePayload();
+  localStorage.setItem('shorts_scene_transfer', JSON.stringify(payload));
+  try{
+    if (window.parent && window.parent !== window && window.parent.goToShortsTab) {
+      window.parent.goToShortsTab('video');
+      return;
+    }
+  }catch(e){}
+  // 허브 밖에서(파일 단독으로) 열었을 때는 그냥 페이지 이동
+  window.location.href = 'shorts-video.html';
 }
 
 let toastTimer;

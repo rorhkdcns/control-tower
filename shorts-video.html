@@ -69,10 +69,10 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;bor
 
   <div class="card">
     <h2>② 보이스 설정 (Gemini TTS)</h2>
-    <div class="hint">이 파이프라인은 유료 Gemini API를 그대로 사용합니다 (제어탑 다른 메뉴와 달리 이 도구는 자동화가 목적이라 API 호출을 씁니다). 열 때마다 키를 다시 입력해야 하며 저장되지 않습니다.</div>
+    <div class="hint">이 파이프라인은 유료 Gemini API를 그대로 사용합니다 (제어탑 다른 메뉴와 달리 이 도구는 자동화가 목적이라 API 호출을 씁니다). 키는 브라우저에 저장되고, 대본 생성 화면에서 넣은 키와 공유돼요.</div>
     <div class="row">
       <label for="gemkey">Gemini API 키</label>
-      <input type="password" id="gemkey" placeholder="열 때마다 붙여넣기 (저장 안 됨)">
+      <input type="password" id="gemkey" placeholder="한 번 입력하면 저장돼요 (대본 생성 화면과 공유)">
     </div>
     <div class="row">
       <label for="ttsmodel">TTS 모델</label>
@@ -134,27 +134,58 @@ drop.addEventListener('drop', e=>{
   if(f) handleSceneFile(f);
 });
 
+function loadSceneData(obj){
+  sceneData = obj;
+  if(!sceneData.scenes || !sceneData.scenes.length) throw new Error('scenes 배열이 비어있습니다');
+  const info = document.getElementById('sceneinfo');
+  info.classList.add('show');
+  info.innerHTML = `
+    <div><b>${esc(sceneData.product?.name || '(상품명 없음)')}</b></div>
+    <div>스토리: ${esc(sceneData.story||'-')} · 길이: ${esc(String(sceneData.length_sec||'-'))}초 · 장면 ${sceneData.scenes.length}개</div>
+    <div>이미지: ${sceneData.product?.image ? esc(sceneData.product.image) : '(없음 — 그라디언트 배경으로 진행)'}</div>
+  `;
+  document.getElementById('genBtn').disabled = false;
+}
+
 function handleSceneFile(file){
   if(!file) return;
   const r = new FileReader();
   r.onload = e=>{
     try{
-      sceneData = JSON.parse(e.target.result);
-      if(!sceneData.scenes || !sceneData.scenes.length) throw new Error('scenes 배열이 비어있습니다');
-      const info = document.getElementById('sceneinfo');
-      info.classList.add('show');
-      info.innerHTML = `
-        <div><b>${esc(sceneData.product?.name || '(상품명 없음)')}</b></div>
-        <div>스토리: ${esc(sceneData.story||'-')} · 길이: ${esc(String(sceneData.length_sec||'-'))}초 · 장면 ${sceneData.scenes.length}개</div>
-        <div>이미지: ${sceneData.product?.image ? esc(sceneData.product.image) : '(없음 — 그라디언트 배경으로 진행)'}</div>
-      `;
-      document.getElementById('genBtn').disabled = false;
+      loadSceneData(JSON.parse(e.target.result));
     }catch(err){
       alert('scenes JSON을 읽지 못했습니다: ' + err.message);
     }
   };
   r.readAsText(file, 'utf-8');
 }
+
+function checkIncomingSceneTransfer(){
+  const raw = localStorage.getItem('shorts_scene_transfer');
+  if(!raw) return;
+  try{
+    loadSceneData(JSON.parse(raw));
+    localStorage.removeItem('shorts_scene_transfer');
+  }catch(err){
+    console.error('전달받은 장면 데이터를 읽지 못했습니다:', err);
+  }
+}
+checkIncomingSceneTransfer();
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'shorts-tab-focus') checkIncomingSceneTransfer();
+});
+
+// 대본 생성 화면과 API 키 공유 (한 번만 입력하면 됨)
+(function(){
+  const keyInput = document.getElementById('gemkey');
+  const saved = localStorage.getItem('gemini_api_key');
+  if (saved) keyInput.value = saved;
+  keyInput.addEventListener('input', function(){
+    const v = this.value.trim();
+    if (v) localStorage.setItem('gemini_api_key', v);
+    else localStorage.removeItem('gemini_api_key');
+  });
+})();
 
 function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 

@@ -79,22 +79,32 @@
   </div>
 
   <script>
+    function activateTab(btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const targetId = btn.dataset.target;
+      document.querySelectorAll('iframe').forEach(f => f.classList.remove('active'));
+      const targetFrame = document.getElementById(targetId);
+
+      if (!targetFrame.src || targetFrame.src === 'about:blank') {
+        targetFrame.src = btn.dataset.src;
+      } else {
+        // 이미 로드된 탭이면, 방금 넘어온 데이터가 있는지 다시 확인하라고 알려줌
+        try { targetFrame.contentWindow.postMessage({ type: 'shorts-tab-focus' }, '*'); } catch(e) {}
+      }
+      targetFrame.classList.add('active');
+    }
+
     document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        const targetId = btn.dataset.target;
-        document.querySelectorAll('iframe').forEach(f => f.classList.remove('active'));
-        const targetFrame = document.getElementById(targetId);
-
-        // 처음 클릭할 때만 로드 (지연 로딩)
-        if (!targetFrame.src || targetFrame.src === 'about:blank') {
-          targetFrame.src = btn.dataset.src;
-        }
-        targetFrame.classList.add('active');
-      });
+      btn.addEventListener('click', () => activateTab(btn));
     });
+
+    // 대본 생성 탭에서 "영상 만들기로 바로 이동" 눌렀을 때 여기로 호출됨
+    window.goToShortsTab = function(name) {
+      const btn = document.querySelector(`.tab-btn[data-target="frame-${name}"]`);
+      if (btn) activateTab(btn);
+    };
   </script>
 </body>
 </html>
