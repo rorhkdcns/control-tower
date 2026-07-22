@@ -168,7 +168,7 @@ header h1 span{color:#f5a623}
     <div class="pinfo" id="modal-pinfo"></div>
     <div class="keyrow">
       <label for="gemkey">제미나이 API 키</label>
-      <input type="password" id="gemkey" placeholder="열 때마다 붙여넣기 (저장 안 됨)">
+      <input type="password" id="gemkey" placeholder="한 번 입력하면 이 브라우저에 저장돼요">
     </div>
     <div>
       <div style="font-size:12.5px;font-weight:700;margin-bottom:7px">대본 길이</div>
@@ -370,6 +370,8 @@ function openScriptModal(id){
   hooks=[]; selHook=-1;
   document.getElementById('fact').classList.remove('show');
   buildLenRow(); buildStoryGrid();
+  const savedKey = localStorage.getItem('gemini_api_key');
+  if (savedKey) document.getElementById('gemkey').value = savedKey;
   document.getElementById('overlay').classList.add('show');
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
@@ -630,6 +632,12 @@ function showToast(msg){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
 }
+
+document.getElementById('gemkey').addEventListener('input', function(){
+  const v = this.value.trim();
+  if (v) localStorage.setItem('gemini_api_key', v);
+  else localStorage.removeItem('gemini_api_key');
+});
 </script>
 </body>
 </html>
