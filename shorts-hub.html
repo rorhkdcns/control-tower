@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>쇼핑쇼츠 자동화 허브</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  * { font-family: 'Pretendard', -apple-system, sans-serif; box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #0b0f19; }
+  .shell { display: flex; flex-direction: column; height: 100vh; }
+  header {
+    background: rgba(24,32,47,0.9);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 15px; font-weight: 700; color: #f1f5f9; margin: 0; white-space: nowrap; }
+  .tabs { display: flex; gap: 6px; }
+  .tab-btn {
+    display: flex; align-items: center; gap: 7px;
+    padding: 9px 16px;
+    border-radius: 10px;
+    font-size: 12.5px; font-weight: 600;
+    color: #94a3b8;
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .tab-btn:hover { color: #e2e8f0; background: rgba(99,102,241,0.1); }
+  .tab-btn.active {
+    color: #fff;
+    background: rgba(99,102,241,0.25);
+    border-color: rgba(99,102,241,0.5);
+  }
+  .frame-wrap { flex: 1; position: relative; background: #0b0f19; }
+  iframe {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border: none;
+    display: none;
+    background: #fff;
+  }
+  iframe.active { display: block; }
+  .loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #64748b; font-size: 13px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1><i class="fa-solid fa-clapperboard" style="color:#a855f7;margin-right:6px;"></i>쇼핑쇼츠 자동화</h1>
+      <div class="tabs" id="tabs">
+        <button class="tab-btn active" data-target="frame-dashboard" data-src="shorts-dashboard.html">
+          <i class="fa-solid fa-cart-shopping" style="color:#f59e0b;"></i> 상품 선정
+        </button>
+        <button class="tab-btn" data-target="frame-video" data-src="shorts-video.html">
+          <i class="fa-solid fa-clapperboard" style="color:#a855f7;"></i> 영상 만들기
+        </button>
+        <button class="tab-btn" data-target="frame-benchmark" data-src="shorts-benchmark.html">
+          <i class="fa-solid fa-chart-line" style="color:#22d3ee;"></i> 벤치마킹
+        </button>
+      </div>
+    </header>
+    <div class="frame-wrap">
+      <iframe id="frame-dashboard" class="active" src="shorts-dashboard.html"></iframe>
+      <iframe id="frame-video" src=""></iframe>
+      <iframe id="frame-benchmark" src=""></iframe>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const targetId = btn.dataset.target;
+        document.querySelectorAll('iframe').forEach(f => f.classList.remove('active'));
+        const targetFrame = document.getElementById(targetId);
+
+        // 처음 클릭할 때만 로드 (지연 로딩)
+        if (!targetFrame.src || targetFrame.src === 'about:blank') {
+          targetFrame.src = btn.dataset.src;
+        }
+        targetFrame.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
