@@ -24,6 +24,9 @@
     .glass-card:hover {
       border-color: rgba(129, 140, 248, 0.7);
     }
+    .workspace-section {
+      background: var(--section-bg, rgba(15, 23, 42, 0.5));
+    }
     .workspace-section.collapsed .workspace-grid {
       display: none;
     }
@@ -101,7 +104,7 @@
 
     <!-- 파트(섹션) 컨테이너 -->
     <div id="sections-container" class="space-y-6">
-      <section class="workspace-section bg-slate-900/50 p-4 rounded-2xl border border-slate-800/70">
+      <section class="workspace-section p-4 rounded-2xl border border-slate-800/70">
         <div class="flex items-center justify-between mb-4 px-1">
           <div class="flex items-center gap-2">
             <span class="section-drag-handle text-slate-500 hover:text-indigo-400 text-base p-1 cursor-grab"><i class="fa-solid fa-grip-vertical"></i></span>
@@ -2194,6 +2197,10 @@
         <label class="text-xs text-slate-400 block mb-1">파트 이름</label>
         <input type="text" id="section-title-input" placeholder="예: 중요, 즐겨찾기, 부업" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') saveSection();">
       </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">파트 색상</label>
+        <input type="color" id="section-color-input" value="#0f172a" class="w-full h-10 bg-slate-800 rounded-xl border border-slate-700 cursor-pointer p-1">
+      </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="closeModal('section-modal')" class="px-3.5 py-2 rounded-xl text-xs text-slate-400 hover:bg-slate-800">취소</button>
         <button onclick="saveSection()" class="px-3.5 py-2 rounded-xl text-xs bg-indigo-600 text-white font-semibold hover:bg-indigo-500">저장</button>
@@ -2302,10 +2309,16 @@
       queueSync();
     }
 
+    function setSectionColor(el, color) {
+      el.dataset.color = color;
+      el.style.setProperty('--section-bg', color);
+    }
+
     function openSectionModal() {
       activeSectionEl = null;
       document.getElementById('section-modal-title').innerText = "새 파트 추가";
       document.getElementById('section-title-input').value = "";
+      document.getElementById('section-color-input').value = "#0f172a";
       document.getElementById('section-modal').classList.remove('hidden');
       document.getElementById('section-modal').classList.add('flex');
     }
@@ -2314,13 +2327,14 @@
       activeSectionEl = btn.closest('.workspace-section');
       document.getElementById('section-modal-title').innerText = "파트 이름 수정";
       document.getElementById('section-title-input').value = activeSectionEl.querySelector('.section-title').innerText;
+      document.getElementById('section-color-input').value = activeSectionEl.dataset.color || "#0f172a";
       document.getElementById('section-modal').classList.remove('hidden');
       document.getElementById('section-modal').classList.add('flex');
     }
 
-    function buildSectionEl(title) {
+    function buildSectionEl(title, color) {
       const sec = document.createElement('section');
-      sec.className = "workspace-section bg-slate-900/50 p-4 rounded-2xl border border-slate-800/70";
+      sec.className = "workspace-section p-4 rounded-2xl border border-slate-800/70";
       sec.innerHTML = `
         <div class="flex items-center justify-between mb-4 px-1">
           <div class="flex items-center gap-2">
@@ -2336,18 +2350,21 @@
         </div>
         <div class="workspace-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start"></div>
       `;
+      if (color) setSectionColor(sec, color);
       return sec;
     }
 
     function saveSection() {
       const title = document.getElementById('section-title-input').value.trim();
+      const color = document.getElementById('section-color-input').value;
       if (!title) return;
 
       if (activeSectionEl) {
         activeSectionEl.querySelector('.section-title').innerText = title;
+        setSectionColor(activeSectionEl, color);
       } else {
         const container = document.getElementById('sections-container');
-        const newSection = buildSectionEl(title);
+        const newSection = buildSectionEl(title, color);
         container.appendChild(newSection);
         initSortable();
       }
@@ -2601,11 +2618,12 @@
       document.querySelectorAll('#sections-container > .workspace-section').forEach(sectionEl => {
         const sectionTitle = sectionEl.querySelector('.section-title').innerText;
         const sectionCollapsed = sectionEl.classList.contains('collapsed');
+        const sectionColor = sectionEl.dataset.color || null;
         const cards = [];
         sectionEl.querySelectorAll(':scope > .workspace-grid > .glass-card').forEach(cardEl => {
           cards.push(serializeCard(cardEl));
         });
-        sections.push({ title: sectionTitle, collapsed: sectionCollapsed, cards });
+        sections.push({ title: sectionTitle, collapsed: sectionCollapsed, color: sectionColor, cards });
       });
       const todoCollapsed = document.getElementById('todo-section').classList.contains('collapsed');
       return { title, sections, todos, todoCollapsed };
@@ -2656,7 +2674,7 @@
     function buildSectionHtml(section) {
       const cardsHtml = (section.cards || []).map(buildCardHtml).join('');
       return `
-        <section class="workspace-section ${section.collapsed ? 'collapsed' : ''} bg-slate-900/50 p-4 rounded-2xl border border-slate-800/70">
+        <section class="workspace-section ${section.collapsed ? 'collapsed' : ''} p-4 rounded-2xl border border-slate-800/70"${section.color ? ` data-color="${section.color}" style="--section-bg:${section.color};"` : ''}>
           <div class="flex items-center justify-between mb-4 px-1">
             <div class="flex items-center gap-2">
               <span class="section-drag-handle text-slate-500 hover:text-indigo-400 text-base p-1 cursor-grab"><i class="fa-solid fa-grip-vertical"></i></span>
