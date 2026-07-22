@@ -17,12 +17,18 @@
     .card-drag-handle, .btn-drag-handle { cursor: grab; }
     .card-drag-handle:active, .btn-drag-handle:active { cursor: grabbing; }
     .glass-card {
-      background: rgba(30, 41, 59, 0.95);
+      background: var(--card-bg, rgba(30, 41, 59, 0.95));
       backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.25);
+      border: 1px solid var(--card-border, rgba(255, 255, 255, 0.25));
     }
     .glass-card:hover {
       border-color: rgba(129, 140, 248, 0.7);
+    }
+    .workspace-section.collapsed .workspace-grid {
+      display: none;
+    }
+    .workspace-section.collapsed .toggle-icon {
+      transform: rotate(-90deg);
     }
     .toggle-icon {
       transition: transform 0.2s ease;
@@ -65,8 +71,8 @@
       </div>
 
       <div class="flex items-center gap-3">
-        <button onclick="openCardModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20">
-          <i class="fa-solid fa-plus"></i> 새 카드 추가
+        <button onclick="openSectionModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20">
+          <i class="fa-solid fa-plus"></i> 새 파트 추가
         </button>
       </div>
     </header>
@@ -93,9 +99,22 @@
       </div>
     </section>
 
-    <!-- 대시보드 그리드 (상단 정렬 items-start) -->
-    <section>
-      <div id="workspace-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">
+    <!-- 파트(섹션) 컨테이너 -->
+    <div id="sections-container" class="space-y-6">
+      <section class="workspace-section bg-slate-900/50 p-4 rounded-2xl border border-slate-800/70">
+        <div class="flex items-center justify-between mb-4 px-1">
+          <div class="flex items-center gap-2">
+            <span class="section-drag-handle text-slate-500 hover:text-indigo-400 text-base p-1 cursor-grab"><i class="fa-solid fa-grip-vertical"></i></span>
+            <h2 class="text-base font-bold text-white section-title">카드</h2>
+          </div>
+          <div class="flex items-center gap-1 text-slate-400">
+            <button onclick="openCardModal(this)" class="hover:text-indigo-400 p-1 text-xs" title="카드 추가"><i class="fa-solid fa-plus"></i></button>
+            <button onclick="editSection(this)" class="hover:text-indigo-400 p-1 text-xs" title="파트 이름 수정"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="deleteSection(this)" class="hover:text-rose-400 p-1 text-xs" title="파트 삭제"><i class="fa-solid fa-trash-can"></i></button>
+            <button onclick="toggleSection(this)" class="hover:text-indigo-400 p-1 text-xs" title="접기/펼치기"><i class="fa-solid fa-chevron-down toggle-icon"></i></button>
+          </div>
+        </div>
+        <div id="workspace-grid" class="workspace-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">
 
         <div class="glass-card collapsed rounded-2xl p-5 space-y-4">
           <div class="flex justify-between items-center border-b border-slate-800 pb-3">
@@ -2143,7 +2162,8 @@
         </div>
 
       </div>
-    </section>
+      </section>
+    </div>
 
   </div>
 
@@ -2153,11 +2173,30 @@
       <h3 id="card-modal-title" class="font-bold text-base text-white">새 카드 추가</h3>
       <div>
         <label class="text-xs text-slate-400 block mb-1">카드 제목</label>
-        <input type="text" id="card-title-input" placeholder="예: 신규 프로젝트" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500">
+        <input type="text" id="card-title-input" placeholder="예: 신규 프로젝트" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') saveCard();">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">카드 색상</label>
+        <input type="color" id="card-color-input" value="#1e293b" class="w-full h-10 bg-slate-800 rounded-xl border border-slate-700 cursor-pointer p-1">
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="closeModal('card-modal')" class="px-3.5 py-2 rounded-xl text-xs text-slate-400 hover:bg-slate-800">취소</button>
         <button onclick="saveCard()" class="px-3.5 py-2 rounded-xl text-xs bg-indigo-600 text-white font-semibold hover:bg-indigo-500">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 파트 모달 -->
+  <div id="section-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4">
+      <h3 id="section-modal-title" class="font-bold text-base text-white">새 파트 추가</h3>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">파트 이름</label>
+        <input type="text" id="section-title-input" placeholder="예: 중요, 즐겨찾기, 부업" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') saveSection();">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeModal('section-modal')" class="px-3.5 py-2 rounded-xl text-xs text-slate-400 hover:bg-slate-800">취소</button>
+        <button onclick="saveSection()" class="px-3.5 py-2 rounded-xl text-xs bg-indigo-600 text-white font-semibold hover:bg-indigo-500">저장</button>
       </div>
     </div>
   </div>
@@ -2169,11 +2208,11 @@
       <div class="space-y-3">
         <div>
           <label class="text-xs text-slate-400 block mb-1">버튼 이름</label>
-          <input type="text" id="link-name-input" placeholder="예: 네이버" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500">
+          <input type="text" id="link-name-input" placeholder="예: 네이버" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') saveLink();">
         </div>
         <div>
           <label class="text-xs text-slate-400 block mb-1">URL (https:// 포함)</label>
-          <input type="text" id="link-url-input" placeholder="https://example.com" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500">
+          <input type="text" id="link-url-input" placeholder="https://example.com" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') saveLink();">
         </div>
         <div>
           <label class="text-xs text-slate-400 block mb-1">버튼 색상</label>
@@ -2196,6 +2235,7 @@
 
     let activeCardEl = null;
     let activeBtnEl = null;
+    let activeSectionEl = null;
     let todos = JSON.parse(localStorage.getItem('workspace_todos') || '[]');
     let syncing = false;
 
@@ -2220,14 +2260,29 @@
       queueSync();
     }
 
+    function setCardColor(el, color) {
+      el.dataset.color = color;
+      el.style.setProperty('--card-bg', color);
+      el.style.setProperty('--card-border', color);
+    }
+
     // SortableJS 초기화
     function initSortable() {
-      const grid = document.getElementById('workspace-grid');
-      new Sortable(grid, {
-        handle: '.card-drag-handle',
+      new Sortable(document.getElementById('sections-container'), {
+        handle: '.section-drag-handle',
         animation: 150,
         ghostClass: 'ghost-card',
         onEnd: () => queueSync()
+      });
+
+      document.querySelectorAll('.workspace-grid').forEach(grid => {
+        new Sortable(grid, {
+          handle: '.card-drag-handle',
+          group: 'workspace-cards',
+          animation: 150,
+          ghostClass: 'ghost-card',
+          onEnd: () => queueSync()
+        });
       });
 
       document.querySelectorAll('.btn-grid').forEach(btnGrid => {
@@ -2241,11 +2296,84 @@
       });
     }
 
+    // ===== 파트(섹션) =====
+    function toggleSection(btn) {
+      btn.closest('.workspace-section').classList.toggle('collapsed');
+      queueSync();
+    }
+
+    function openSectionModal() {
+      activeSectionEl = null;
+      document.getElementById('section-modal-title').innerText = "새 파트 추가";
+      document.getElementById('section-title-input').value = "";
+      document.getElementById('section-modal').classList.remove('hidden');
+      document.getElementById('section-modal').classList.add('flex');
+    }
+
+    function editSection(btn) {
+      activeSectionEl = btn.closest('.workspace-section');
+      document.getElementById('section-modal-title').innerText = "파트 이름 수정";
+      document.getElementById('section-title-input').value = activeSectionEl.querySelector('.section-title').innerText;
+      document.getElementById('section-modal').classList.remove('hidden');
+      document.getElementById('section-modal').classList.add('flex');
+    }
+
+    function buildSectionEl(title) {
+      const sec = document.createElement('section');
+      sec.className = "workspace-section bg-slate-900/50 p-4 rounded-2xl border border-slate-800/70";
+      sec.innerHTML = `
+        <div class="flex items-center justify-between mb-4 px-1">
+          <div class="flex items-center gap-2">
+            <span class="section-drag-handle text-slate-500 hover:text-indigo-400 text-base p-1 cursor-grab"><i class="fa-solid fa-grip-vertical"></i></span>
+            <h2 class="text-base font-bold text-white section-title">${title}</h2>
+          </div>
+          <div class="flex items-center gap-1 text-slate-400">
+            <button onclick="openCardModal(this)" class="hover:text-indigo-400 p-1 text-xs" title="카드 추가"><i class="fa-solid fa-plus"></i></button>
+            <button onclick="editSection(this)" class="hover:text-indigo-400 p-1 text-xs" title="파트 이름 수정"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="deleteSection(this)" class="hover:text-rose-400 p-1 text-xs" title="파트 삭제"><i class="fa-solid fa-trash-can"></i></button>
+            <button onclick="toggleSection(this)" class="hover:text-indigo-400 p-1 text-xs" title="접기/펼치기"><i class="fa-solid fa-chevron-down toggle-icon"></i></button>
+          </div>
+        </div>
+        <div class="workspace-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start"></div>
+      `;
+      return sec;
+    }
+
+    function saveSection() {
+      const title = document.getElementById('section-title-input').value.trim();
+      if (!title) return;
+
+      if (activeSectionEl) {
+        activeSectionEl.querySelector('.section-title').innerText = title;
+      } else {
+        const container = document.getElementById('sections-container');
+        const newSection = buildSectionEl(title);
+        container.appendChild(newSection);
+        initSortable();
+      }
+      closeModal('section-modal');
+      queueSync();
+    }
+
+    function deleteSection(btn) {
+      const section = btn.closest('.workspace-section');
+      const cardCount = section.querySelectorAll('.glass-card').length;
+      const msg = cardCount > 0
+        ? `이 파트 안에 카드가 ${cardCount}개 있어요. 파트와 카드가 전부 삭제됩니다. 계속할까요?`
+        : '이 파트를 삭제하시겠습니까?';
+      if (confirm(msg)) {
+        section.remove();
+        queueSync();
+      }
+    }
+
     // 카드 모달
-    function openCardModal() {
+    function openCardModal(btn) {
       activeCardEl = null;
+      activeSectionEl = btn ? btn.closest('.workspace-section') : document.querySelector('.workspace-section');
       document.getElementById('card-modal-title').innerText = "새 카드 추가";
       document.getElementById('card-title-input').value = "";
+      document.getElementById('card-color-input').value = "#1e293b";
       document.getElementById('card-modal').classList.remove('hidden');
       document.getElementById('card-modal').classList.add('flex');
     }
@@ -2253,13 +2381,15 @@
     function editCard(btn) {
       activeCardEl = btn.closest('.glass-card');
       const currentTitle = activeCardEl.querySelector('.card-title').innerText;
+      const currentColor = activeCardEl.dataset.color || "#1e293b";
       document.getElementById('card-modal-title').innerText = "카드 제목 수정";
       document.getElementById('card-title-input').value = currentTitle;
+      document.getElementById('card-color-input').value = currentColor;
       document.getElementById('card-modal').classList.remove('hidden');
       document.getElementById('card-modal').classList.add('flex');
     }
 
-    function buildCardEl(title) {
+    function buildCardEl(title, color) {
       const newCard = document.createElement('div');
       newCard.className = "glass-card rounded-2xl p-5 space-y-4";
       newCard.innerHTML = `
@@ -2277,18 +2407,21 @@
         </div>
         <div class="btn-grid grid grid-cols-3 gap-2.5 min-h-[60px]"></div>
       `;
+      if (color) setCardColor(newCard, color);
       return newCard;
     }
 
     function saveCard() {
       const title = document.getElementById('card-title-input').value.trim();
+      const color = document.getElementById('card-color-input').value;
       if (!title) return;
 
       if (activeCardEl) {
         activeCardEl.querySelector('.card-title').innerText = title;
+        setCardColor(activeCardEl, color);
       } else {
-        const grid = document.getElementById('workspace-grid');
-        const newCard = buildCardEl(title);
+        const grid = activeSectionEl ? activeSectionEl.querySelector('.workspace-grid') : document.getElementById('workspace-grid');
+        const newCard = buildCardEl(title, color);
         grid.appendChild(newCard);
         initSortable();
       }
@@ -2436,35 +2569,46 @@
     }
 
     // ===== 상태 직렬화 / 복원 (Supabase 동기화용) =====
+    function serializeCard(cardEl) {
+      const cardTitle = cardEl.querySelector('.card-title').innerText;
+      const collapsed = cardEl.classList.contains('collapsed');
+      const color = cardEl.dataset.color || null;
+      const buttons = [];
+      cardEl.querySelectorAll('.btn-item').forEach(btnEl => {
+        const a = btnEl.querySelector('a');
+        const label = btnEl.querySelector('.btn-label').innerText;
+        const href = a.getAttribute('href');
+        const btnColor = btnEl.dataset.color || null;
+        const iconEl = a.querySelector('img, i');
+        let iconType = 'fa', icon = 'fa-solid fa-globe text-indigo-400 text-lg';
+        if (iconEl) {
+          if (iconEl.tagName === 'IMG') {
+            iconType = 'img';
+            icon = iconEl.getAttribute('src');
+          } else {
+            iconType = 'fa';
+            icon = iconEl.className;
+          }
+        }
+        buttons.push({ label, href, iconType, icon, color: btnColor });
+      });
+      return { title: cardTitle, collapsed, color, buttons };
+    }
+
     function serializeState() {
       const title = document.getElementById('workspace-title').innerText;
-      const cards = [];
-      document.querySelectorAll('#workspace-grid > .glass-card').forEach(cardEl => {
-        const cardTitle = cardEl.querySelector('.card-title').innerText;
-        const collapsed = cardEl.classList.contains('collapsed');
-        const buttons = [];
-        cardEl.querySelectorAll('.btn-item').forEach(btnEl => {
-          const a = btnEl.querySelector('a');
-          const label = btnEl.querySelector('.btn-label').innerText;
-          const href = a.getAttribute('href');
-          const color = btnEl.dataset.color || null;
-          const iconEl = a.querySelector('img, i');
-          let iconType = 'fa', icon = 'fa-solid fa-globe text-indigo-400 text-lg';
-          if (iconEl) {
-            if (iconEl.tagName === 'IMG') {
-              iconType = 'img';
-              icon = iconEl.getAttribute('src');
-            } else {
-              iconType = 'fa';
-              icon = iconEl.className;
-            }
-          }
-          buttons.push({ label, href, iconType, icon, color });
+      const sections = [];
+      document.querySelectorAll('#sections-container > .workspace-section').forEach(sectionEl => {
+        const sectionTitle = sectionEl.querySelector('.section-title').innerText;
+        const sectionCollapsed = sectionEl.classList.contains('collapsed');
+        const cards = [];
+        sectionEl.querySelectorAll(':scope > .workspace-grid > .glass-card').forEach(cardEl => {
+          cards.push(serializeCard(cardEl));
         });
-        cards.push({ title: cardTitle, collapsed, buttons });
+        sections.push({ title: sectionTitle, collapsed: sectionCollapsed, cards });
       });
       const todoCollapsed = document.getElementById('todo-section').classList.contains('collapsed');
-      return { title, cards, todos, todoCollapsed };
+      return { title, sections, todos, todoCollapsed };
     }
 
     function buildButtonHtml(btn) {
@@ -2488,9 +2632,11 @@
     }
 
     function buildCardHtml(card) {
-      const buttonsHtml = card.buttons.map(buildButtonHtml).join('');
+      const buttonsHtml = (card.buttons || []).map(buildButtonHtml).join('');
+      const colorStyle = card.color ? ` style="--card-bg:${card.color};--card-border:${card.color};"` : '';
+      const colorAttr = card.color ? ` data-color="${card.color}"` : '';
       return `
-        <div class="glass-card ${card.collapsed ? 'collapsed' : ''} rounded-2xl p-5 space-y-4">
+        <div class="glass-card ${card.collapsed ? 'collapsed' : ''} rounded-2xl p-5 space-y-4"${colorAttr}${colorStyle}>
           <div class="flex justify-between items-center border-b border-slate-800 pb-3">
             <div class="flex items-center gap-2">
               <span class="card-drag-handle text-slate-500 hover:text-indigo-400 text-base p-1"><i class="fa-solid fa-grip-vertical"></i></span>
@@ -2507,10 +2653,35 @@
         </div>`;
     }
 
+    function buildSectionHtml(section) {
+      const cardsHtml = (section.cards || []).map(buildCardHtml).join('');
+      return `
+        <section class="workspace-section ${section.collapsed ? 'collapsed' : ''} bg-slate-900/50 p-4 rounded-2xl border border-slate-800/70">
+          <div class="flex items-center justify-between mb-4 px-1">
+            <div class="flex items-center gap-2">
+              <span class="section-drag-handle text-slate-500 hover:text-indigo-400 text-base p-1 cursor-grab"><i class="fa-solid fa-grip-vertical"></i></span>
+              <h2 class="text-base font-bold text-white section-title">${section.title}</h2>
+            </div>
+            <div class="flex items-center gap-1 text-slate-400">
+              <button onclick="openCardModal(this)" class="hover:text-indigo-400 p-1 text-xs" title="카드 추가"><i class="fa-solid fa-plus"></i></button>
+              <button onclick="editSection(this)" class="hover:text-indigo-400 p-1 text-xs" title="파트 이름 수정"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="deleteSection(this)" class="hover:text-rose-400 p-1 text-xs" title="파트 삭제"><i class="fa-solid fa-trash-can"></i></button>
+              <button onclick="toggleSection(this)" class="hover:text-indigo-400 p-1 text-xs" title="접기/펼치기"><i class="fa-solid fa-chevron-down toggle-icon"></i></button>
+            </div>
+          </div>
+          <div class="workspace-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">${cardsHtml}</div>
+        </section>`;
+    }
+
     function applyState(state) {
       document.getElementById('workspace-title').innerText = state.title || '마이 멀티태스킹 워크스페이스';
-      const grid = document.getElementById('workspace-grid');
-      grid.innerHTML = (state.cards || []).map(buildCardHtml).join('');
+      // 구버전(파트 없음) 상태와의 호환: 예전엔 최상위 cards 배열만 있었음 -> 기본 파트 하나로 감싸기
+      let sections = state.sections;
+      if (!sections && Array.isArray(state.cards)) {
+        sections = [{ title: '카드', collapsed: false, cards: state.cards }];
+      }
+      const container = document.getElementById('sections-container');
+      container.innerHTML = (sections || []).map(buildSectionHtml).join('');
       todos = state.todos || [];
       saveTodos();
       renderTodos();
@@ -2551,7 +2722,10 @@
 
         if (error) throw error;
 
-        if (data && data.data && Array.isArray(data.data.cards) && data.data.cards.length) {
+        const hasSections = data && data.data && Array.isArray(data.data.sections) && data.data.sections.length;
+        const hasOldCards = data && data.data && Array.isArray(data.data.cards) && data.data.cards.length;
+
+        if (hasSections || hasOldCards) {
           syncing = true;
           applyState(data.data);
           syncing = false;
