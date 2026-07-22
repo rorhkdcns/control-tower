@@ -170,6 +170,10 @@ header h1 span{color:#f5a623}
       <label for="gemkey">제미나이 API 키</label>
       <input type="password" id="gemkey" placeholder="한 번 입력하면 이 브라우저에 저장돼요">
     </div>
+    <div class="keyrow">
+      <label for="gemmodel">모델명 (에러 뜨면 여기서 교체)</label>
+      <input type="text" id="gemmodel" value="gemini-2.5-flash" placeholder="예: gemini-2.5-flash">
+    </div>
     <div>
       <div style="font-size:12.5px;font-weight:700;margin-bottom:7px">대본 길이</div>
       <div class="len-row" id="len-row"></div>
@@ -372,6 +376,8 @@ function openScriptModal(id){
   buildLenRow(); buildStoryGrid();
   const savedKey = localStorage.getItem('gemini_api_key');
   if (savedKey) document.getElementById('gemkey').value = savedKey;
+  const savedModel = localStorage.getItem('gemini_model');
+  if (savedModel) document.getElementById('gemmodel').value = savedModel;
   document.getElementById('overlay').classList.add('show');
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
@@ -416,6 +422,10 @@ function stripFence(t){
   return t.replace(/^\s*\`\`\`(?:json)?/i,'').replace(/\`\`\`\s*$/,'').trim();
 }
 
+function getGeminiModel(){
+  return (document.getElementById('gemmodel').value.trim()) || 'gemini-2.5-flash';
+}
+
 async function generateScript(){
   const key=document.getElementById('gemkey').value.trim();
   if(!key){ showToast('제미나이 API 키를 입력해줘'); return; }
@@ -424,7 +434,7 @@ async function generateScript(){
   const btn=document.getElementById('btn-gen');
   btn.innerHTML='<span class="spin"></span>생성 중...'; btn.disabled=true;
   try{
-    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`,{
+    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getGeminiModel())}:generateContent?key=${encodeURIComponent(key)}`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -513,7 +523,7 @@ JSON으로만 출력:
  "issues":[{"scene":1,"level":"warn","text":"문제 문장","fix":"수정 제안"}]}`;
 
   try{
-    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`,{
+    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getGeminiModel())}:generateContent?key=${encodeURIComponent(key)}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json"}})
     });
@@ -573,7 +583,7 @@ async function suggestHooks(){
 - 근거 없는 단정(최고, 1위, 무조건)은 쓰지 말 것
 - JSON 배열로만 출력: ["제목1","제목2",...]`;
   try{
-    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`,{
+    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(getGeminiModel())}:generateContent?key=${encodeURIComponent(key)}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json"}})
     });
@@ -637,6 +647,12 @@ document.getElementById('gemkey').addEventListener('input', function(){
   const v = this.value.trim();
   if (v) localStorage.setItem('gemini_api_key', v);
   else localStorage.removeItem('gemini_api_key');
+});
+
+document.getElementById('gemmodel').addEventListener('input', function(){
+  const v = this.value.trim();
+  if (v) localStorage.setItem('gemini_model', v);
+  else localStorage.removeItem('gemini_model');
 });
 </script>
 </body>
