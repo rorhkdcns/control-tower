@@ -37,7 +37,9 @@
       transition: transform 0.2s ease;
     }
     .glass-card.collapsed .btn-grid {
-      display: none;
+      max-height: 68px;
+      overflow-y: auto;
+      opacity: 0.55;
     }
     .glass-card.collapsed .toggle-icon {
       transform: rotate(-90deg);
@@ -62,7 +64,39 @@
 </head>
 <body class="min-h-screen p-4 md:p-8 pb-16">
 
-  <div class="max-w-7xl mx-auto space-y-6">
+  <!-- 로그인 화면 -->
+  <div id="auth-screen" class="fixed inset-0 bg-black flex items-center justify-center p-4 z-[100]">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4">
+      <h1 class="text-lg font-bold text-white text-center">워크스페이스 로그인</h1>
+
+      <!-- 1단계: 사용자 선택 탭 -->
+      <div id="user-select-step">
+        <p class="text-xs text-slate-400 text-center mb-3">사용자를 선택하세요</p>
+        <div id="user-tabs" class="flex flex-wrap gap-2 justify-center"></div>
+      </div>
+
+      <!-- 2단계: 비밀번호 입력 -->
+      <div id="password-step" class="hidden space-y-3">
+        <p class="text-sm text-white text-center font-semibold"><span id="selected-user-label"></span>님, 비밀번호를 입력하세요</p>
+        <input type="password" id="auth-password-input" placeholder="비밀번호" class="w-full bg-slate-800 text-slate-200 text-sm p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') handlePasswordSubmit();">
+        <button id="password-submit-btn" onclick="handlePasswordSubmit()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl text-sm font-semibold transition-all">입장하기</button>
+        <button onclick="backToUserList()" class="w-full text-xs text-slate-500 hover:text-slate-300 py-1">다른 사용자 선택</button>
+      </div>
+
+      <!-- 새 사용자 추가 -->
+      <div id="new-user-step" class="hidden space-y-3">
+        <p class="text-sm text-white text-center font-semibold">새 사용자 추가</p>
+        <input type="text" id="new-username-input" placeholder="이름 (예: 길몽)" class="w-full bg-slate-800 text-slate-200 text-sm p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500">
+        <input type="password" id="new-password-input" placeholder="비밀번호 설정 (6자 이상)" class="w-full bg-slate-800 text-slate-200 text-sm p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500" onkeydown="if(event.key==='Enter') handleCreateUser();">
+        <button id="new-user-submit-btn" onclick="handleCreateUser()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl text-sm font-semibold transition-all">추가하고 입장하기</button>
+        <button onclick="backToUserList()" class="w-full text-xs text-slate-500 hover:text-slate-300 py-1">취소</button>
+      </div>
+
+      <p id="auth-error" class="text-xs text-rose-400 hidden text-center"></p>
+    </div>
+  </div>
+
+  <div id="main-content" class="max-w-7xl mx-auto space-y-6 hidden">
     
     <!-- GNB / 상단 헤더 -->
     <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
@@ -74,8 +108,12 @@
       </div>
 
       <div class="flex items-center gap-3">
+        <span id="auth-user-email" class="text-xs text-slate-500"></span>
         <button onclick="openSectionModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20">
           <i class="fa-solid fa-plus"></i> 새 파트 추가
+        </button>
+        <button onclick="handleLogout()" class="text-slate-500 hover:text-rose-400 p-2 text-sm transition-colors" title="로그아웃">
+          <i class="fa-solid fa-right-from-bracket"></i>
         </button>
       </div>
     </header>
@@ -2237,7 +2275,6 @@
     // ===== Supabase 동기화 설정 =====
     const SUPABASE_URL = 'https://ivlyefexwmjslrlkghlm.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2bHllZmV4d21qc2xybGtnaGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNzMwNDcsImV4cCI6MjA5Njk0OTA0N30.UcGeZbBKr5PfZcAK4RF50E0e2kM57ECM3qBtjBo3Iiw';
-    const STATE_ROW_ID = 'main';
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let activeCardEl = null;
@@ -2712,13 +2749,15 @@
     let syncTimer = null;
     function queueSync() {
       if (syncing) return; // applyState로 원격 상태를 반영하는 중엔 재저장하지 않음
+      if (!STATE_ROW_ID) return; // 로그인 전에는 저장하지 않음
       clearTimeout(syncTimer);
       syncTimer = setTimeout(syncToSupabase, 700);
     }
 
     async function syncToSupabase() {
+      if (!STATE_ROW_ID) return;
       const state = serializeState();
-      localStorage.setItem('workspace_state_cache', JSON.stringify(state));
+      localStorage.setItem('workspace_state_cache_' + STATE_ROW_ID, JSON.stringify(state));
       try {
         await sb.from('workspace_state').upsert({
           id: STATE_ROW_ID,
@@ -2730,7 +2769,16 @@
       }
     }
 
-    async function initFromSupabase() {
+    function emptyState() {
+      return {
+        title: '마이 워크스페이스',
+        sections: [{ title: '카드', collapsed: false, color: null, cards: [] }],
+        todos: [],
+        todoCollapsed: false
+      };
+    }
+
+    async function loadWorkspaceForCurrentUser() {
       try {
         const { data, error } = await sb
           .from('workspace_state')
@@ -2743,24 +2791,189 @@
         const hasSections = data && data.data && Array.isArray(data.data.sections) && data.data.sections.length;
         const hasOldCards = data && data.data && Array.isArray(data.data.cards) && data.data.cards.length;
 
+        syncing = true;
         if (hasSections || hasOldCards) {
-          syncing = true;
           applyState(data.data);
-          syncing = false;
         } else {
-          // Supabase에 아직 저장된 게 없으면 지금 화면(초기 카드 구성)을 그대로 첫 저장
-          initSortable();
-          renderTodos();
+          // 신규 계정: 빈 워크스페이스로 시작 (다른 사람 카드가 보이지 않도록)
+          applyState(emptyState());
           await syncToSupabase();
         }
+        syncing = false;
       } catch (e) {
-        console.error('Supabase 연결 실패 - 로컬 상태로 표시합니다:', e);
-        initSortable();
-        renderTodos();
+        console.error('Supabase 연결 실패 - 빈 상태로 표시합니다:', e);
+        applyState(emptyState());
       }
     }
 
-    initFromSupabase();
+    // ===== 로그인 (사용자 탭 + 비밀번호) =====
+    let STATE_ROW_ID = null;
+    let selectedUsername = null;
+    const EMAIL_DOMAIN = 'controltower.local';
+
+    async function usernameToEmail(username) {
+      const enc = new TextEncoder().encode(username.trim().toLowerCase());
+      const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+      const hex = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      return 'u' + hex.slice(0, 24) + '@' + EMAIL_DOMAIN;
+    }
+
+    function showAuthError(msg) {
+      const el = document.getElementById('auth-error');
+      el.innerText = msg;
+      el.classList.remove('hidden');
+    }
+
+    function hideAuthError() {
+      document.getElementById('auth-error').classList.add('hidden');
+    }
+
+    function showStep(step) {
+      document.getElementById('user-select-step').classList.toggle('hidden', step !== 'select');
+      document.getElementById('password-step').classList.toggle('hidden', step !== 'password');
+      document.getElementById('new-user-step').classList.toggle('hidden', step !== 'new');
+      hideAuthError();
+    }
+
+    async function loadUserTabs() {
+      const tabsEl = document.getElementById('user-tabs');
+      tabsEl.innerHTML = '<span class="text-xs text-slate-600">불러오는 중...</span>';
+      try {
+        const { data, error } = await sb.from('dashboard_profiles').select('username').order('created_at', { ascending: true });
+        if (error) throw error;
+        tabsEl.innerHTML = '';
+        (data || []).forEach(row => {
+          const btn = document.createElement('button');
+          btn.className = 'px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-indigo-600 text-slate-200 border border-slate-700 transition-all';
+          btn.innerText = row.username;
+          btn.onclick = () => selectUser(row.username);
+          tabsEl.appendChild(btn);
+        });
+        const addBtn = document.createElement('button');
+        addBtn.className = 'px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800/50 hover:bg-slate-700 text-indigo-400 border border-dashed border-slate-600 transition-all';
+        addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 사용자 추가';
+        addBtn.onclick = () => showStep('new');
+        tabsEl.appendChild(addBtn);
+      } catch (e) {
+        tabsEl.innerHTML = '';
+        const addBtn = document.createElement('button');
+        addBtn.className = 'px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800/50 hover:bg-slate-700 text-indigo-400 border border-dashed border-slate-600 transition-all';
+        addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> 사용자 추가';
+        addBtn.onclick = () => showStep('new');
+        tabsEl.appendChild(addBtn);
+        console.error('사용자 목록 로드 실패:', e);
+      }
+    }
+
+    function selectUser(username) {
+      selectedUsername = username;
+      document.getElementById('selected-user-label').innerText = username;
+      document.getElementById('auth-password-input').value = '';
+      showStep('password');
+      document.getElementById('auth-password-input').focus();
+    }
+
+    function backToUserList() {
+      selectedUsername = null;
+      showStep('select');
+      loadUserTabs();
+    }
+
+    async function handlePasswordSubmit() {
+      const password = document.getElementById('auth-password-input').value;
+      hideAuthError();
+      if (!password) {
+        showAuthError('비밀번호를 입력해주세요.');
+        return;
+      }
+      const btn = document.getElementById('password-submit-btn');
+      btn.disabled = true;
+      btn.innerText = '확인 중...';
+      try {
+        const email = await usernameToEmail(selectedUsername);
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await onAuthReady();
+      } catch (e) {
+        showAuthError('비밀번호가 올바르지 않아요.');
+        btn.disabled = false;
+        btn.innerText = '입장하기';
+      }
+    }
+
+    async function handleCreateUser() {
+      const username = document.getElementById('new-username-input').value.trim();
+      const password = document.getElementById('new-password-input').value;
+      hideAuthError();
+      if (!username || !password) {
+        showAuthError('이름과 비밀번호를 입력해주세요.');
+        return;
+      }
+      if (password.length < 6) {
+        showAuthError('비밀번호는 6자 이상이어야 해요.');
+        return;
+      }
+      const btn = document.getElementById('new-user-submit-btn');
+      btn.disabled = true;
+      btn.innerText = '처리 중...';
+      try {
+        const email = await usernameToEmail(username);
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.user && !data.session) {
+          showAuthError('관리자에게 Supabase "Confirm email" 설정을 꺼달라고 요청해주세요.');
+          btn.disabled = false;
+          btn.innerText = '추가하고 입장하기';
+          return;
+        }
+        await sb.from('dashboard_profiles').upsert({ id: data.user.id, username });
+        await onAuthReady();
+      } catch (e) {
+        showAuthError(e.message && e.message.includes('already registered') ? '이미 있는 이름이에요. 다른 이름을 써주세요.' : (e.message || '오류가 발생했어요.'));
+        btn.disabled = false;
+        btn.innerText = '추가하고 입장하기';
+      }
+    }
+
+    async function handleLogout() {
+      await sb.auth.signOut();
+      STATE_ROW_ID = null;
+      selectedUsername = null;
+      document.getElementById('main-content').classList.add('hidden');
+      document.getElementById('auth-screen').classList.remove('hidden');
+      document.getElementById('auth-screen').classList.add('flex');
+      showStep('select');
+      loadUserTabs();
+    }
+
+    async function onAuthReady() {
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) return;
+      STATE_ROW_ID = user.id; // 각자 자기 계정에만 자기 카드가 보임
+      document.getElementById('auth-user-email').innerText = selectedUsername || '';
+      document.getElementById('auth-user-email').title = '내 사용자 ID: ' + user.id;
+      console.log('내 사용자 ID (마이그레이션용):', user.id);
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('auth-screen').classList.remove('flex');
+      document.getElementById('main-content').classList.remove('hidden');
+      await loadWorkspaceForCurrentUser();
+    }
+
+    async function initAuth() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session && session.user) {
+        try {
+          const { data } = await sb.from('dashboard_profiles').select('username').eq('id', session.user.id).maybeSingle();
+          selectedUsername = data ? data.username : null;
+        } catch (e) { /* 무시 */ }
+        await onAuthReady();
+      } else {
+        showStep('select');
+        loadUserTabs();
+      }
+    }
+
+    initAuth();
   </script>
 </body>
 </html>
