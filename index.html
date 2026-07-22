@@ -109,6 +109,10 @@
 
       <div class="flex items-center gap-3">
         <span id="auth-user-email" class="text-xs text-slate-500"></span>
+        <input type="file" id="bookmark-file-input" accept=".html,text/html" class="hidden" onchange="handleBookmarkImport(event)">
+        <button onclick="document.getElementById('bookmark-file-input').click()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all border border-slate-600" title="브라우저에서 내보낸 북마크 HTML 파일을 올리면 카드로 정리해줘요">
+          <i class="fa-solid fa-bookmark"></i> 북마크 가져오기
+        </button>
         <button onclick="openSectionModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20">
           <i class="fa-solid fa-plus"></i> 새 파트 추가
         </button>
@@ -2726,6 +2730,100 @@
           </div>
           <div class="workspace-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-start">${cardsHtml}</div>
         </section>`;
+    }
+
+    // ===== 북마크 파일 가져오기 =====
+    function decodeHtmlEntities(str) {
+      const ta = document.createElement('textarea');
+      ta.innerHTML = str;
+      return ta.value;
+    }
+
+    function parseBookmarksHtml(text) {
+      const tokenRe = /<H3[^>]*>(?<folder>[^<]*)<\/H3>|<A(?<attrs1>[^>]*?)HREF="(?<href>[^"]*)"(?<attrs2>[^>]*)>(?<link>[^<]*)<\/A>|(?<dlopen><DL><p>)|(?<dlclose><\/DL><p>)/gis;
+      const root = { name: 'ROOT', children: [], links: [] };
+      const stack = [root];
+      let lastFolder = null;
+      let m;
+      while ((m = tokenRe.exec(text)) !== null) {
+        const g = m.groups;
+        if (g.folder !== undefined) {
+          const node = { name: decodeHtmlEntities(g.folder.trim()) || '(이름 없음)', children: [], links: [] };
+          stack[stack.length - 1].children.push(node);
+          lastFolder = node;
+        } else if (g.href !== undefined) {
+          const attrsAll = (g.attrs1 || '') + (g.attrs2 || '');
+          const iconMatch = /ICON="([^"]*)"/i.exec(attrsAll);
+          const icon = iconMatch ? iconMatch[1] : null;
+          const name = decodeHtmlEntities((g.link || '').trim()) || '(제목 없음)';
+          stack[stack.length - 1].links.push({ name, href: g.href.trim(), icon });
+        } else if (g.dlopen !== undefined) {
+          if (lastFolder) { stack.push(lastFolder); lastFolder = null; }
+        } else if (g.dlclose !== undefined) {
+          if (stack.length > 1) stack.pop();
+        }
+      }
+      return root;
+    }
+
+    function buildImportedCard(title, links) {
+      const buttons = links.map(l => ({
+        label: l.name,
+        href: l.href,
+        iconType: l.icon ? 'img' : 'fa',
+        icon: l.icon || 'fa-solid fa-globe text-indigo-400 text-lg',
+        color: null
+      }));
+      return { title, collapsed: false, color: null, buttons };
+    }
+
+    async function handleBookmarkImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const root = parseBookmarksHtml(text);
+        if (!root.children.length && !root.links.length) {
+          alert('북마크를 찾지 못했어요. 브라우저에서 내보낸 북마크 HTML 파일이 맞는지 확인해주세요.');
+          return;
+        }
+
+        const toolbar = root.children.find(c => c.name.includes('북마크바') || /bookmarks?\s*bar/i.test(c.name)) || null;
+        const others = toolbar ? root.children.filter(c => c !== toolbar) : root.children;
+
+        const cards = [];
+        if (toolbar) {
+          toolbar.children.forEach(folder => {
+            if (folder.links.length) cards.push(buildImportedCard(folder.name, folder.links));
+          });
+          if (toolbar.links.length) cards.push(buildImportedCard('즐겨찾기', toolbar.links));
+        }
+        others.forEach(folder => {
+          if (folder.links.length) cards.push(buildImportedCard(folder.name, folder.links));
+        });
+        if (root.links.length) cards.push(buildImportedCard('기타 북마크', root.links));
+
+        if (!cards.length) {
+          alert('가져올 북마크가 없어요.');
+          return;
+        }
+
+        const section = {
+          title: (selectedUsername ? selectedUsername + '의 북마크' : '가져온 북마크'),
+          collapsed: false,
+          color: null,
+          cards
+        };
+        document.getElementById('sections-container').insertAdjacentHTML('beforeend', buildSectionHtml(section));
+        initSortable();
+        queueSync();
+        alert(`카드 ${cards.length}개를 새 파트로 가져왔어요!`);
+      } catch (e) {
+        console.error('북마크 가져오기 실패:', e);
+        alert('북마크 파일을 읽는 중 문제가 발생했어요.');
+      } finally {
+        event.target.value = '';
+      }
     }
 
     function applyState(state) {
