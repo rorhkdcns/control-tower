@@ -135,10 +135,7 @@ header h1 span{color:#f5a623}
 <header>
   <h1>쇼핑쇼츠 <span>컨트롤</span></h1>
   <div class="file-zone">
-    <button class="btn btn-ghost" onclick="loadSample()">샘플 데이터 보기</button>
     <button class="btn btn-load" id="btn-coupang-fetch" onclick="fetchFromCoupangProxy()">쿠팡 상품 불러오기</button>
-    <button class="btn btn-load" onclick="document.getElementById('csvfile').click()">bestsellers.csv 불러오기</button>
-    <input type="file" id="csvfile" accept=".csv" hidden onchange="handleFile(this.files[0])">
   </div>
 </header>
 
@@ -159,7 +156,7 @@ header h1 span{color:#f5a623}
 
 <div class="empty" id="empty">
   <b>아직 상품 데이터가 없어</b>
-  위에 "쿠팡 상품 불러오기"로 바로 가져오거나(Vercel 프록시 주소 필요), <code>coupang_bestsellers.py</code> 실행해서 나온 <code>bestsellers.csv</code>를 불러오거나, 샘플 데이터로 화면부터 확인해봐.
+  위에 "쿠팡 상품 불러오기"를 눌러서 실시간 베스트셀러를 가져와.
 </div>
 
 <div class="grid" id="grid"></div>
@@ -344,9 +341,11 @@ async function fetchFromCoupangProxy(){
   }
 }
 
+const DEFAULT_PROXY_URL = 'https://coupang-proxy-73un.vercel.app/api/bestsellers';
+
 (function(){
   const saved = localStorage.getItem('coupang_proxy_url');
-  if (saved) document.getElementById('proxyUrlInput').value = saved;
+  document.getElementById('proxyUrlInput').value = saved || DEFAULT_PROXY_URL;
   document.getElementById('proxyUrlInput').addEventListener('input', function(){
     localStorage.setItem('coupang_proxy_url', this.value.trim());
   });
