@@ -146,6 +146,11 @@ header h1 span{color:#f5a623}
   <input type="text" id="proxyUrlInput" placeholder="Vercel 프록시 주소 (예: https://coupang-proxy.vercel.app/api/bestsellers)" style="flex:1;min-width:260px">
 </div>
 
+<div class="toolbar" style="gap:10px;flex-wrap:wrap;align-items:flex-start">
+  <span style="font-size:12.5px;font-weight:700;color:var(--muted);white-space:nowrap;padding-top:4px">가져올 카테고리</span>
+  <div id="catPicker" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+</div>
+
 <div class="toolbar">
   <input type="search" id="q" placeholder="상품명 검색" oninput="render()">
   <div id="chips" style="display:flex;gap:8px;flex-wrap:wrap"></div>
@@ -274,11 +279,46 @@ function handleFile(file){
 
 function loadSample(){ products=[...SAMPLE]; afterLoad(); showToast('샘플 데이터 로드됨'); }
 
+const COUPANG_CATEGORIES = {
+  '1001':'여성패션','1002':'남성패션','1010':'뷰티','1011':'출산/유아동',
+  '1012':'식품','1013':'주방용품','1014':'생활용품','1015':'홈인테리어',
+  '1016':'가전디지털','1017':'스포츠/레저','1018':'자동차용품','1019':'도서/음반/DVD',
+  '1020':'완구/취미','1021':'문구/오피스','1024':'헬스/건강식품',
+  '1025':'국내여행','1026':'해외여행','1029':'반려동물용품'
+};
+const DEFAULT_CATEGORY_IDS = ['1016','1014','1010'];
+
+function getSelectedCategoryIds(){
+  return [...document.querySelectorAll('#catPicker input[type=checkbox]:checked')].map(el => el.value);
+}
+
+function buildCatPicker(){
+  const saved = JSON.parse(localStorage.getItem('coupang_categories') || 'null') || DEFAULT_CATEGORY_IDS;
+  const picker = document.getElementById('catPicker');
+  picker.innerHTML = Object.entries(COUPANG_CATEGORIES).map(([id, name]) => `
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#f4f1ea;border:1px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer">
+      <input type="checkbox" value="${id}" ${saved.includes(id) ? 'checked' : ''} onchange="saveCatSelection()">${name}
+    </label>
+  `).join('');
+}
+
+function saveCatSelection(){
+  localStorage.setItem('coupang_categories', JSON.stringify(getSelectedCategoryIds()));
+}
+
+buildCatPicker();
+
 async function fetchFromCoupangProxy(){
   const urlInput = document.getElementById('proxyUrlInput');
-  const url = urlInput.value.trim();
+  let url = urlInput.value.trim();
   if(!url){ showToast('Vercel 프록시 주소를 먼저 입력해줘'); return; }
   localStorage.setItem('coupang_proxy_url', url);
+
+  const catIds = getSelectedCategoryIds();
+  if(catIds.length){
+    const sep = url.includes('?') ? '&' : '?';
+    url += sep + 'categories=' + catIds.join(',');
+  }
 
   const btn = document.getElementById('btn-coupang-fetch');
   const origText = btn.textContent;
