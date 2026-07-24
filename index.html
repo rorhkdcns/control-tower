@@ -116,11 +116,20 @@
         <button onclick="openSectionModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20">
           <i class="fa-solid fa-plus"></i> 새 파트 추가
         </button>
+        <button onclick="openAdminPanel()" class="text-slate-500 hover:text-amber-400 p-2 text-sm transition-colors" title="사용자 관리">
+          <i class="fa-solid fa-user-gear"></i>
+        </button>
         <button onclick="handleLogout()" class="text-slate-500 hover:text-rose-400 p-2 text-sm transition-colors" title="로그아웃">
           <i class="fa-solid fa-right-from-bracket"></i>
         </button>
       </div>
     </header>
+
+    <!-- 관리자 조회 배너 -->
+    <div id="admin-view-banner" class="hidden bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold px-4 py-3 rounded-xl flex items-center justify-between">
+      <span id="admin-view-label"></span>
+      <button onclick="exitAdminView()" class="bg-amber-500 text-slate-900 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-amber-400">내 대시보드로 돌아가기</button>
+    </div>
 
     <!-- TO DO 리스트 -->
     <section id="todo-section" class="bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl">
@@ -2250,6 +2259,17 @@
     </div>
   </div>
 
+  <!-- 관리자 패널 -->
+  <div id="admin-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-base text-white">사용자 관리</h3>
+        <button onclick="closeModal('admin-modal')" class="text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="admin-user-list" class="space-y-2 overflow-y-auto flex-1"></div>
+    </div>
+  </div>
+
   <!-- 링크 모달 -->
   <div id="link-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4">
@@ -2844,6 +2864,10 @@
     }
 
     // ===== Supabase 저장/불러오기 =====
+    const ADMIN_ENDPOINT = 'https://coupang-proxy-73un.vercel.app/api/admin';
+    let adminViewingUserId = null;
+    let adminViewingUsername = null;
+
     let syncTimer = null;
     function queueSync() {
       if (syncing) return; // applyState로 원격 상태를 반영하는 중엔 재저장하지 않음
@@ -2855,6 +2879,22 @@
     async function syncToSupabase() {
       if (!STATE_ROW_ID) return;
       const state = serializeState();
+
+      if (adminViewingUserId) {
+        // 관리자가 다른 사람 대시보드를 보는 중이면, 그 사람 데이터로 저장
+        try {
+          const { data: { session } } = await sb.auth.getSession();
+          await fetch(ADMIN_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+            body: JSON.stringify({ action: 'save', userId: adminViewingUserId, data: state })
+          });
+        } catch (e) {
+          console.error('관리자 저장 실패:', e);
+        }
+        return;
+      }
+
       localStorage.setItem('workspace_state_cache_' + STATE_ROW_ID, JSON.stringify(state));
       try {
         await sb.from('workspace_state').upsert({
@@ -2864,6 +2904,86 @@
         });
       } catch (e) {
         console.error('Supabase 저장 실패:', e);
+      }
+    }
+
+    // ===== 관리자 패널 =====
+    async function adminFetch(action, extra){
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) { alert('로그인이 필요합니다.'); return null; }
+      const isGet = action === 'list' || action === 'get';
+      const url = ADMIN_ENDPOINT + '?action=' + encodeURIComponent(action) + (extra && extra.userId ? '&userId=' + encodeURIComponent(extra.userId) : '');
+      const opts = {
+        method: isGet ? 'GET' : 'POST',
+        headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' }
+      };
+      if (!isGet) opts.body = JSON.stringify({ action, ...extra });
+      const resp = await fetch(url, opts);
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.error || ('HTTP ' + resp.status));
+      return json;
+    }
+
+    async function openAdminPanel(){
+      const modal = document.getElementById('admin-modal');
+      const list = document.getElementById('admin-user-list');
+      list.innerHTML = '<div class="text-xs text-slate-500">불러오는 중...</div>';
+      modal.classList.remove('hidden'); modal.classList.add('flex');
+      try{
+        const result = await adminFetch('list');
+        if (!result) return;
+        const profiles = result.profiles || [];
+        if (!profiles.length){
+          list.innerHTML = '<div class="text-xs text-slate-500">등록된 사용자가 없어요.</div>';
+          return;
+        }
+        list.innerHTML = profiles.map(p => `
+          <div class="flex items-center justify-between bg-slate-800/70 border border-slate-700 rounded-xl px-3 py-2.5">
+            <span class="text-sm font-semibold text-slate-100">${p.username}</span>
+            <div class="flex items-center gap-1.5">
+              <button onclick="viewUserAsAdmin('${p.id}','${p.username.replace(/'/g,"\\'")}')" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg font-semibold">보기/수정</button>
+              <button onclick="deleteUserAsAdmin('${p.id}','${p.username.replace(/'/g,"\\'")}')" class="text-xs bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1.5 rounded-lg font-semibold">삭제</button>
+            </div>
+          </div>
+        `).join('');
+      }catch(e){
+        list.innerHTML = `<div class="text-xs text-rose-400">${e.message}</div>`;
+      }
+    }
+
+    async function viewUserAsAdmin(userId, username){
+      try{
+        const result = await adminFetch('get', { userId });
+        if (!result) return;
+        adminViewingUserId = userId;
+        adminViewingUsername = username;
+        syncing = true;
+        applyState(result.data || emptyState());
+        syncing = false;
+        document.getElementById('admin-view-label').innerText = `지금 "${username}" 님의 대시보드를 보고 있어요 (여기서 수정하면 그 사람 화면에 그대로 반영돼요)`;
+        document.getElementById('admin-view-banner').classList.remove('hidden');
+        closeModal('admin-modal');
+      }catch(e){
+        alert('불러오기 실패: ' + e.message);
+      }
+    }
+
+    async function exitAdminView(){
+      adminViewingUserId = null;
+      adminViewingUsername = null;
+      document.getElementById('admin-view-banner').classList.add('hidden');
+      await loadWorkspaceForCurrentUser();
+    }
+
+    async function deleteUserAsAdmin(userId, username){
+      if (!confirm(`"${username}" 계정을 완전히 삭제할까요?\n대시보드 데이터와 로그인 계정이 전부 사라지고 되돌릴 수 없어요.`)) return;
+      if (!confirm('정말로 삭제할까요? 한 번 더 확인할게요.')) return;
+      try{
+        await adminFetch('delete', { userId });
+        if (adminViewingUserId === userId) await exitAdminView();
+        openAdminPanel();
+      }catch(e){
+        alert('삭제 실패: ' + e.message);
       }
     }
 
