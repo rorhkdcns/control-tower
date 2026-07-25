@@ -3026,16 +3026,22 @@
       }
     }
 
-    function applyState(state) {
+    function applyState(state, seedDefaults) {
       document.getElementById('workspace-title').innerText = state.title || '마이 멀티태스킹 워크스페이스';
       // 구버전(파트 없음) 상태와의 호환: 예전엔 최상위 cards 배열만 있었음 -> 기본 파트 하나로 감싸기
       let sections = state.sections;
       if (!sections && Array.isArray(state.cards)) {
         sections = [{ title: '카드', collapsed: false, cards: state.cards }];
       }
-      if (!sections || !sections.length) {
+      if (!sections) sections = [];
+      if (seedDefaults) {
         const defaultNames = ['벨루나', '블로그', '쇼핑쇼츠', '길몽상점', 'AI', '네이버블로그관리', '기타'];
-        sections = defaultNames.map(name => ({ title: name, collapsed: false, color: null, cards: [] }));
+        const existingTitles = new Set(sections.map(s => s.title));
+        defaultNames.forEach(name => {
+          if (!existingTitles.has(name)) {
+            sections.push({ title: name, collapsed: false, color: null, cards: [] });
+          }
+        });
       }
       const container = document.getElementById('sections-container');
       container.innerHTML = (sections || []).map(buildSectionHtml).join('');
@@ -3195,13 +3201,13 @@
 
         syncing = true;
         if (hasSections || hasOldCards) {
-          applyState(data.data);
+          applyState(data.data, true);
         } else {
           // 신규 계정: 빈 워크스페이스로 시작 (다른 사람 카드가 보이지 않도록)
-          applyState(emptyState());
-          await syncToSupabase();
+          applyState(emptyState(), true);
         }
         syncing = false;
+        await syncToSupabase();
       } catch (e) {
         console.error('Supabase 연결 실패 - 빈 상태로 표시합니다:', e);
         applyState(emptyState());
