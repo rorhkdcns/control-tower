@@ -36,6 +36,41 @@
     .toggle-icon {
       transition: transform 0.2s ease;
     }
+    .workspace-section.tab-hidden {
+      display: none;
+    }
+    #section-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .section-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(71, 85, 105, 0.6);
+      cursor: grab;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .section-tab:hover {
+      color: #e2e8f0;
+      border-color: rgba(129, 140, 248, 0.6);
+    }
+    .section-tab.active {
+      background: #6366f1;
+      color: #fff;
+      border-color: #6366f1;
+    }
+    .section-tab:active {
+      cursor: grabbing;
+    }
     .glass-card.collapsed .btn-grid {
       max-height: 68px;
       overflow-y: auto;
@@ -152,6 +187,9 @@
         <ul id="todo-list" class="grid grid-cols-2 gap-2"></ul>
       </div>
     </section>
+
+    <!-- 파트 탭바 -->
+    <div id="section-tabs"></div>
 
     <!-- 파트(섹션) 컨테이너 -->
     <div id="sections-container" class="space-y-6">
@@ -2252,6 +2290,10 @@
         <label class="text-xs text-slate-400 block mb-1">파트 색상</label>
         <input type="color" id="section-color-input" value="#0f172a" class="w-full h-10 bg-slate-800 rounded-xl border border-slate-700 cursor-pointer p-1">
       </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">전용화면 바로가기 URL (선택)</label>
+        <input type="text" id="section-url-input" placeholder="입력하면 탭 클릭 시 카드 대신 이 주소로 바로 이동해요" class="w-full bg-slate-800 text-slate-200 text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500">
+      </div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="closeModal('section-modal')" class="px-3.5 py-2 rounded-xl text-xs text-slate-400 hover:bg-slate-800">취소</button>
         <button onclick="saveSection()" class="px-3.5 py-2 rounded-xl text-xs bg-indigo-600 text-white font-semibold hover:bg-indigo-500">저장</button>
@@ -2340,7 +2382,7 @@
         handle: '.section-drag-handle',
         animation: 150,
         ghostClass: 'ghost-card',
-        onEnd: () => queueSync()
+        onEnd: () => { renderSectionTabs(); queueSync(); }
       });
 
       document.querySelectorAll('.workspace-grid').forEach(grid => {
@@ -2362,6 +2404,89 @@
           onEnd: () => queueSync()
         });
       });
+
+      renderSectionTabs();
+    }
+
+    // ===== 파트 탭바 =====
+    let activeTabId = null;
+
+    function ensureTabIds() {
+      document.querySelectorAll('#sections-container > .workspace-section').forEach(el => {
+        if (!el.dataset.tabId) el.dataset.tabId = genTabId();
+      });
+    }
+
+    function updateSectionVisibility() {
+      document.querySelectorAll('#sections-container > .workspace-section').forEach(s => {
+        if (s.dataset.url) {
+          s.classList.add('tab-hidden');
+        } else if (s.dataset.tabId === activeTabId) {
+          s.classList.remove('tab-hidden');
+        } else {
+          s.classList.add('tab-hidden');
+        }
+      });
+    }
+
+    function selectTab(tabId) {
+      const secs = [...document.querySelectorAll('#sections-container > .workspace-section')];
+      const target = secs.find(s => s.dataset.tabId === tabId);
+      if (target && target.dataset.url) {
+        window.open(target.dataset.url, '_blank');
+        return;
+      }
+      activeTabId = tabId;
+      renderSectionTabs();
+    }
+
+    function renameTabById(tabId) {
+      const el = [...document.querySelectorAll('#sections-container > .workspace-section')].find(s => s.dataset.tabId === tabId);
+      if (el) editSectionEl(el);
+    }
+
+    function renderSectionTabs() {
+      ensureTabIds();
+      const bar = document.getElementById('section-tabs');
+      const secs = [...document.querySelectorAll('#sections-container > .workspace-section')];
+      if (!secs.length) { bar.innerHTML = ''; return; }
+
+      const cardSecs = secs.filter(s => !s.dataset.url);
+      if (!activeTabId || !cardSecs.some(s => s.dataset.tabId === activeTabId)) {
+        activeTabId = cardSecs.length ? cardSecs[0].dataset.tabId : null;
+      }
+
+      bar.innerHTML = secs.map(s => {
+        const id = s.dataset.tabId;
+        const title = s.querySelector('.section-title').innerText;
+        const isActive = id === activeTabId;
+        const linkIcon = s.dataset.url ? ' <i class="fa-solid fa-arrow-up-right-from-square"></i>' : '';
+        return `<div class="section-tab ${isActive ? 'active' : ''}" data-tab-id="${id}">
+          <span data-tab-label>${title}${linkIcon}</span>
+          <i class="fa-solid fa-pen text-[9px] opacity-50 hover:opacity-100" data-tab-edit title="탭 이름 수정"></i>
+        </div>`;
+      }).join('');
+
+      bar.querySelectorAll('.section-tab').forEach(tabEl => {
+        tabEl.querySelector('[data-tab-label]').onclick = () => selectTab(tabEl.dataset.tabId);
+        tabEl.querySelector('[data-tab-edit]').onclick = (e) => { e.stopPropagation(); renameTabById(tabEl.dataset.tabId); };
+      });
+
+      updateSectionVisibility();
+
+      if (bar._sortable) bar._sortable.destroy();
+      bar._sortable = new Sortable(bar, {
+        animation: 150,
+        onEnd: () => {
+          const order = [...bar.querySelectorAll('.section-tab')].map(t => t.dataset.tabId);
+          const container = document.getElementById('sections-container');
+          order.forEach(id => {
+            const el = [...container.children].find(c => c.dataset.tabId === id);
+            if (el) container.appendChild(el);
+          });
+          queueSync();
+        }
+      });
     }
 
     // ===== 파트(섹션) =====
@@ -2380,22 +2505,30 @@
       document.getElementById('section-modal-title').innerText = "새 파트 추가";
       document.getElementById('section-title-input').value = "";
       document.getElementById('section-color-input').value = "#0f172a";
+      document.getElementById('section-url-input').value = "";
+      document.getElementById('section-modal').classList.remove('hidden');
+      document.getElementById('section-modal').classList.add('flex');
+    }
+
+    function editSectionEl(el) {
+      activeSectionEl = el;
+      document.getElementById('section-modal-title').innerText = "파트 이름 수정";
+      document.getElementById('section-title-input').value = el.querySelector('.section-title').innerText;
+      document.getElementById('section-color-input').value = el.dataset.color || "#0f172a";
+      document.getElementById('section-url-input').value = el.dataset.url || "";
       document.getElementById('section-modal').classList.remove('hidden');
       document.getElementById('section-modal').classList.add('flex');
     }
 
     function editSection(btn) {
-      activeSectionEl = btn.closest('.workspace-section');
-      document.getElementById('section-modal-title').innerText = "파트 이름 수정";
-      document.getElementById('section-title-input').value = activeSectionEl.querySelector('.section-title').innerText;
-      document.getElementById('section-color-input').value = activeSectionEl.dataset.color || "#0f172a";
-      document.getElementById('section-modal').classList.remove('hidden');
-      document.getElementById('section-modal').classList.add('flex');
+      editSectionEl(btn.closest('.workspace-section'));
     }
 
-    function buildSectionEl(title, color) {
+    function buildSectionEl(title, color, url) {
       const sec = document.createElement('section');
       sec.className = "workspace-section p-4 rounded-2xl border border-slate-800/70";
+      sec.dataset.tabId = genTabId();
+      if (url) sec.dataset.url = url;
       sec.innerHTML = `
         <div class="flex items-center justify-between mb-4 px-1">
           <div class="flex items-center gap-2">
@@ -2418,18 +2551,21 @@
     function saveSection() {
       const title = document.getElementById('section-title-input').value.trim();
       const color = document.getElementById('section-color-input').value;
+      const url = document.getElementById('section-url-input').value.trim();
       if (!title) return;
 
       if (activeSectionEl) {
         activeSectionEl.querySelector('.section-title').innerText = title;
         setSectionColor(activeSectionEl, color);
+        if (url) { activeSectionEl.dataset.url = url; } else { delete activeSectionEl.dataset.url; }
       } else {
         const container = document.getElementById('sections-container');
-        const newSection = buildSectionEl(title, color);
+        const newSection = buildSectionEl(title, color, url);
         container.appendChild(newSection);
         initSortable();
       }
       closeModal('section-modal');
+      renderSectionTabs();
       queueSync();
     }
 
@@ -2440,7 +2576,10 @@
         ? `이 파트 안에 카드가 ${cardCount}개 있어요. 파트와 카드가 전부 삭제됩니다. 계속할까요?`
         : '이 파트를 삭제하시겠습니까?';
       if (confirm(msg)) {
+        const wasActive = section.dataset.tabId === activeTabId;
         section.remove();
+        if (wasActive) activeTabId = null;
+        renderSectionTabs();
         queueSync();
       }
     }
@@ -2684,7 +2823,9 @@
         sectionEl.querySelectorAll(':scope > .workspace-grid > .glass-card').forEach(cardEl => {
           cards.push(serializeCard(cardEl));
         });
-        sections.push({ title: sectionTitle, collapsed: sectionCollapsed, color: sectionColor, cards });
+        const sectionUrl = sectionEl.dataset.url || null;
+        const sectionTabId = sectionEl.dataset.tabId || null;
+        sections.push({ title: sectionTitle, collapsed: sectionCollapsed, color: sectionColor, url: sectionUrl, tabId: sectionTabId, cards });
       });
       const todoCollapsed = document.getElementById('todo-section').classList.contains('collapsed');
       return { title, sections, todos, todoCollapsed };
@@ -2732,10 +2873,16 @@
         </div>`;
     }
 
+    function genTabId() {
+      return 'sec_' + Math.random().toString(36).slice(2, 9);
+    }
+
     function buildSectionHtml(section) {
       const cardsHtml = (section.cards || []).map(buildCardHtml).join('');
+      const tabId = section.tabId || genTabId();
+      const urlAttr = section.url ? ` data-url="${section.url}"` : '';
       return `
-        <section class="workspace-section ${section.collapsed ? 'collapsed' : ''} p-4 rounded-2xl border border-slate-800/70"${section.color ? ` data-color="${section.color}" style="--section-bg:${section.color};"` : ''}>
+        <section class="workspace-section ${section.collapsed ? 'collapsed' : ''} p-4 rounded-2xl border border-slate-800/70" data-tab-id="${tabId}"${urlAttr}${section.color ? ` data-color="${section.color}" style="--section-bg:${section.color};"` : ''}>
           <div class="flex items-center justify-between mb-4 px-1">
             <div class="flex items-center gap-2">
               <span class="section-drag-handle text-slate-500 hover:text-indigo-400 text-base p-1 cursor-grab"><i class="fa-solid fa-grip-vertical"></i></span>
