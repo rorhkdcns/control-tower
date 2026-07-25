@@ -71,6 +71,10 @@
     .section-tab:active {
       cursor: grabbing;
     }
+    #add-tab-btn {
+      cursor: pointer;
+      padding: 8px 12px;
+    }
     .glass-card.collapsed .btn-grid {
       max-height: 68px;
       overflow-y: auto;
@@ -2495,6 +2499,21 @@
       renderSectionTabs();
     }
 
+    function deleteTabById(tabId) {
+      const el = [...document.querySelectorAll('#sections-container > .workspace-section')].find(s => s.dataset.tabId === tabId);
+      if (!el) return;
+      const cardCount = el.querySelectorAll('.glass-card').length;
+      const msg = cardCount > 0
+        ? `이 탭 안에 카드가 ${cardCount}개 있어요. 탭과 카드가 전부 삭제됩니다. 계속할까요?`
+        : '이 탭을 삭제하시겠습니까?';
+      if (!confirm(msg)) return;
+      const wasActive = tabId === activeTabId;
+      el.remove();
+      if (wasActive) activeTabId = null;
+      renderSectionTabs();
+      queueSync();
+    }
+
     function renameTabById(tabId) {
       const el = [...document.querySelectorAll('#sections-container > .workspace-section')].find(s => s.dataset.tabId === tabId);
       if (el) editSectionEl(el);
@@ -2519,28 +2538,33 @@
         return `<div class="section-tab ${isActive ? 'active' : ''}" data-tab-id="${id}">
           <span data-tab-label>${title}${linkIcon}</span>
           <i class="fa-solid fa-pen text-[9px] opacity-50 hover:opacity-100" data-tab-edit title="탭 이름 수정"></i>
+          <i class="fa-solid fa-xmark text-[10px] opacity-50 hover:opacity-100 hover:text-rose-400" data-tab-delete title="탭 삭제"></i>
         </div>`;
-      }).join('');
+      }).join('') + `<div class="section-tab" id="add-tab-btn" title="새 탭 추가"><i class="fa-solid fa-plus"></i></div>`;
 
-      bar.querySelectorAll('.section-tab').forEach(tabEl => {
+      bar.querySelectorAll('.section-tab[data-tab-id]').forEach(tabEl => {
         const labelEl = tabEl.querySelector('[data-tab-label]');
         labelEl.onclick = () => selectTab(tabEl.dataset.tabId);
         labelEl.ondblclick = (e) => { e.stopPropagation(); renameTabById(tabEl.dataset.tabId); };
         tabEl.querySelector('[data-tab-edit]').onclick = (e) => { e.stopPropagation(); renameTabById(tabEl.dataset.tabId); };
+        tabEl.querySelector('[data-tab-delete]').onclick = (e) => { e.stopPropagation(); deleteTabById(tabEl.dataset.tabId); };
       });
+      document.getElementById('add-tab-btn').onclick = () => openSectionModal();
 
       updateSectionVisibility();
 
       if (bar._sortable) bar._sortable.destroy();
       bar._sortable = new Sortable(bar, {
         animation: 150,
+        filter: '#add-tab-btn',
         onEnd: () => {
-          const order = [...bar.querySelectorAll('.section-tab')].map(t => t.dataset.tabId);
+          const order = [...bar.querySelectorAll('.section-tab[data-tab-id]')].map(t => t.dataset.tabId);
           const container = document.getElementById('sections-container');
           order.forEach(id => {
             const el = [...container.children].find(c => c.dataset.tabId === id);
             if (el) container.appendChild(el);
           });
+          bar.appendChild(document.getElementById('add-tab-btn'));
           queueSync();
         }
       });
