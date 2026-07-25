@@ -2468,7 +2468,9 @@
       }).join('');
 
       bar.querySelectorAll('.section-tab').forEach(tabEl => {
-        tabEl.querySelector('[data-tab-label]').onclick = () => selectTab(tabEl.dataset.tabId);
+        const labelEl = tabEl.querySelector('[data-tab-label]');
+        labelEl.onclick = () => selectTab(tabEl.dataset.tabId);
+        labelEl.ondblclick = (e) => { e.stopPropagation(); renameTabById(tabEl.dataset.tabId); };
         tabEl.querySelector('[data-tab-edit]').onclick = (e) => { e.stopPropagation(); renameTabById(tabEl.dataset.tabId); };
       });
 
@@ -2739,6 +2741,9 @@
     }
 
     // TO DO 리스트
+    let dragTodoIdx = null;
+    let editingTodoIdx = null;
+
     function saveTodos() {
       localStorage.setItem('workspace_todos', JSON.stringify(todos));
     }
@@ -2748,12 +2753,40 @@
       list.innerHTML = '';
       todos.forEach((todo, idx) => {
         const li = document.createElement('li');
+        li.draggable = editingTodoIdx !== idx;
         li.className = 'flex items-center gap-3 bg-slate-800/80 border border-slate-600 rounded-xl px-3 py-2.5 group';
-        li.innerHTML = `
-          <input type="checkbox" ${todo.done ? 'checked' : ''} onchange="toggleTodo(${idx})" class="w-4 h-4 accent-indigo-500 cursor-pointer flex-shrink-0">
-          <span class="flex-1 text-sm ${todo.done ? 'line-through text-slate-500' : 'text-slate-100'}">${todo.text}</span>
-          <button onclick="deleteTodo(${idx})" class="text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
-        `;
+
+        if (editingTodoIdx === idx) {
+          li.innerHTML = `<input type="text" value="${todo.text}" class="flex-1 bg-slate-900 text-slate-100 text-sm p-1.5 rounded-lg border border-indigo-500 focus:outline-none">`;
+          const inp = li.querySelector('input');
+          inp.focus();
+          inp.select();
+          const commit = () => { todo.text = inp.value.trim() || todo.text; editingTodoIdx = null; saveTodos(); renderTodos(); queueSync(); };
+          inp.onkeydown = (e) => { if (e.key === 'Enter') commit(); };
+          inp.onblur = commit;
+        } else {
+          li.innerHTML = `
+            <span class="text-slate-600 group-hover:text-indigo-400 text-xs cursor-grab"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input type="checkbox" ${todo.done ? 'checked' : ''} class="w-4 h-4 accent-indigo-500 cursor-pointer flex-shrink-0">
+            <span class="flex-1 text-sm cursor-text ${todo.done ? 'line-through text-slate-500' : 'text-slate-100'}">${todo.text}</span>
+            <button class="text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+          `;
+          li.querySelector('input[type="checkbox"]').onchange = () => toggleTodo(idx);
+          li.querySelector('.flex-1').ondblclick = () => { editingTodoIdx = idx; renderTodos(); };
+          li.querySelector('button').onclick = () => deleteTodo(idx);
+        }
+
+        li.ondragstart = () => dragTodoIdx = idx;
+        li.ondragover = (e) => e.preventDefault();
+        li.ondrop = () => {
+          if (dragTodoIdx === null || dragTodoIdx === idx) return;
+          const [moved] = todos.splice(dragTodoIdx, 1);
+          todos.splice(idx, 0, moved);
+          dragTodoIdx = null;
+          saveTodos();
+          renderTodos();
+          queueSync();
+        };
         list.appendChild(li);
       });
       const remaining = todos.filter(t => !t.done).length;
@@ -2999,6 +3032,10 @@
       let sections = state.sections;
       if (!sections && Array.isArray(state.cards)) {
         sections = [{ title: '카드', collapsed: false, cards: state.cards }];
+      }
+      if (!sections || !sections.length) {
+        const defaultNames = ['벨루나', '블로그', '쇼핑쇼츠', '길몽상점', 'AI', '네이버블로그관리', '기타'];
+        sections = defaultNames.map(name => ({ title: name, collapsed: false, color: null, cards: [] }));
       }
       const container = document.getElementById('sections-container');
       container.innerHTML = (sections || []).map(buildSectionHtml).join('');
