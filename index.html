@@ -2391,7 +2391,8 @@
           group: 'workspace-cards',
           animation: 150,
           ghostClass: 'ghost-card',
-          onEnd: () => queueSync()
+          onStart: () => showTabDropzones(),
+          onEnd: () => { clearTabDropzones(); queueSync(); }
         });
       });
 
@@ -2406,6 +2407,47 @@
       });
 
       renderSectionTabs();
+    }
+
+    // ===== 카드 → 탭 드래그로 이동 =====
+    let cardDropzones = [];
+
+    function showTabDropzones() {
+      clearTabDropzones();
+      document.querySelectorAll('.section-tab').forEach(tabEl => {
+        const id = tabEl.dataset.tabId;
+        const sec = [...document.querySelectorAll('#sections-container > .workspace-section')].find(s => s.dataset.tabId === id);
+        if (!sec || sec.dataset.url) return; // 전용화면 이동형 탭은 카드 드롭 대상 아님
+
+        const rect = tabEl.getBoundingClientRect();
+        const zone = document.createElement('div');
+        zone.className = 'tab-dropzone';
+        zone.style.cssText = `position:fixed; left:${rect.left}px; top:${rect.top}px; width:${rect.width}px; height:${rect.height}px; z-index:60; border-radius:9999px; border:2px dashed #818cf8; background:rgba(99,102,241,0.18);`;
+        document.body.appendChild(zone);
+
+        const sortable = new Sortable(zone, {
+          group: 'workspace-cards',
+          animation: 0,
+          onAdd: (evt) => {
+            const card = evt.item;
+            zone.removeChild(card);
+            const grid = sec.querySelector('.workspace-grid');
+            grid.appendChild(card);
+            renderSectionTabs();
+            queueSync();
+            setTimeout(clearTabDropzones, 0);
+          }
+        });
+        cardDropzones.push({ zone, sortable });
+      });
+    }
+
+    function clearTabDropzones() {
+      cardDropzones.forEach(({ zone, sortable }) => {
+        sortable.destroy();
+        zone.remove();
+      });
+      cardDropzones = [];
     }
 
     // ===== 파트 탭바 =====
