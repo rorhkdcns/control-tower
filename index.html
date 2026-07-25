@@ -2402,7 +2402,8 @@
           group: 'card-buttons',
           animation: 150,
           ghostClass: 'ghost-btn',
-          onEnd: () => queueSync()
+          onStart: () => showTabDropzones(),
+          onEnd: () => { clearTabDropzones(); queueSync(); }
         });
       });
 
@@ -2426,14 +2427,26 @@
         document.body.appendChild(zone);
 
         const sortable = new Sortable(zone, {
-          group: 'workspace-cards',
+          group: { name: 'tab-drop-target', pull: false, put: ['workspace-cards', 'card-buttons'] },
           animation: 0,
           onAdd: (evt) => {
-            const card = evt.item;
-            zone.removeChild(card);
-            const grid = sec.querySelector('.workspace-grid');
-            grid.appendChild(card);
+            const item = evt.item;
+            zone.removeChild(item);
+
+            if (item.classList.contains('glass-card')) {
+              const grid = sec.querySelector('.workspace-grid');
+              grid.appendChild(item);
+            } else if (item.classList.contains('btn-item')) {
+              let firstCard = sec.querySelector('.workspace-grid > .glass-card');
+              if (!firstCard) {
+                sec.querySelector('.workspace-grid').insertAdjacentHTML('beforeend', buildCardHtml({ title: '가져온 버튼', collapsed: false, color: null, buttons: [] }));
+                firstCard = sec.querySelector('.workspace-grid > .glass-card:last-child');
+              }
+              firstCard.querySelector('.btn-grid').appendChild(item);
+            }
+
             renderSectionTabs();
+            initSortable();
             queueSync();
             setTimeout(clearTabDropzones, 0);
           }
