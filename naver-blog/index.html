@@ -352,11 +352,8 @@
       <input type="text" id="searchTopic" placeholder="주제 (예: 가발, 캠핑용품, 강아지사료...)">
       <button id="searchBtn" type="button">검색</button>
     </div>
-    <div class="search-status" id="searchStatus">주제를 입력하고 검색하면, 지금 선택된 블로그 계정 기준으로 연관 키워드가 검색량 순으로 나와요.</div>
+    <div class="search-status" id="searchStatus">주제를 입력하고 검색하면, 지금 선택된 블로그 계정에 연관 키워드가 검색량 순으로 자동 저장돼요.</div>
     <div class="search-results" id="searchResults"></div>
-    <div class="search-results-actions" id="searchActions" style="display:none;">
-      <button id="saveSearchBtn">이 결과 전부 저장</button>
-    </div>
   </section>
 
   <section>
@@ -1068,38 +1065,15 @@ document.getElementById('searchBtn').onclick = async () => {
     statusEl.textContent = '주제를 먼저 입력해줘.';
     return;
   }
-
-  btn.disabled = true;
-  statusEl.textContent = `'${topic}' 연관 키워드 검색 중...`;
-  document.getElementById('searchActions').style.display = 'none';
-
-  try {
-    const url = `${KEYWORD_SEARCH_PROXY}?topic=${encodeURIComponent(topic)}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || '검색 실패');
-
-    lastSearchResults = data.results || [];
-    lastSearchTopic = topic;
-    renderSearchResults(lastSearchResults);
-    statusEl.textContent = `${lastSearchResults.length}개 결과 (검색량 높은 순)`;
-    document.getElementById('searchActions').style.display = lastSearchResults.length ? 'flex' : 'none';
-  } catch (e) {
-    statusEl.textContent = '검색 실패: ' + e.message;
-  } finally {
-    btn.disabled = false;
-  }
-};
-
-async function doSaveSearch() {
-  const statusEl = document.getElementById('searchStatus');
   const p = PROJECTS[currentProject];
   if (!p) {
     statusEl.textContent = '먼저 상단에서 블로그 계정을 선택하거나 "+ 새 프로젝트"로 만들어줘.';
     return;
   }
 
-  statusEl.textContent = `'${p.label}'에 저장 중...`;
+  btn.disabled = true;
+  statusEl.textContent = `'${topic}' 연관 키워드 검색 중...`;
+
   try {
     const { data: { session } } = await supabaseClient.auth.getSession();
     const resp = await fetch(KEYWORD_SEARCH_PROXY, {
@@ -1108,24 +1082,25 @@ async function doSaveSearch() {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + session.access_token,
       },
-      body: JSON.stringify({ topic: lastSearchTopic, project: p.slug, register: true }),
+      body: JSON.stringify({ topic, project: p.slug, register: true }),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || '저장 실패');
+    if (!resp.ok) throw new Error(data.error || '검색 실패');
 
-    statusEl.textContent = `'${p.label}'에 ${data.results.length}개 키워드 저장 완료!`;
+    lastSearchResults = data.results || [];
+    lastSearchTopic = topic;
+    renderSearchResults(lastSearchResults);
+    statusEl.textContent = `${lastSearchResults.length}개 결과 -> '${p.label}'에 자동 저장 완료!`;
     document.getElementById('searchTopic').value = '';
-    document.getElementById('searchActions').style.display = 'none';
-    document.getElementById('searchResults').innerHTML = '';
 
     loadDashboard();
     suggestKeyword();
   } catch (e) {
-    statusEl.textContent = '저장 실패: ' + e.message;
+    statusEl.textContent = '검색 실패: ' + e.message;
+  } finally {
+    btn.disabled = false;
   }
-}
-
-document.getElementById('saveSearchBtn').onclick = doSaveSearch;
+};
 
 // ===== 초기화: 프로젝트부터 불러온 뒤 나머지 로드 =====
 async function init() {
