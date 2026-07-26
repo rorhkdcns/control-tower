@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>네이버블로그 관제 | Rank Radar</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root{
+    --bg:#0a0e17;
+    --panel:#121826;
+    --panel-2:#0d1220;
+    --line:#1f2937;
+    --text:#e8ecf4;
+    --text-dim:#8791a8;
+    --accent:#3ddad7;     /* 신호/레이더 시안 */
+    --accent-2:#f0b429;   /* 골드 - 방문자/성과 */
+    --up:#3ddad7;
+    --down:#fb7185;
+    --font-display:'Spectral', Georgia, serif;
+    --font-body:'Inter', -apple-system, sans-serif;
+    --font-mono:'JetBrains Mono', 'Consolas', monospace;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Spectral:wght@300;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(61,218,215,0.08), transparent),
+      radial-gradient(ellipse 700px 400px at 100% 0%, rgba(240,180,41,0.05), transparent),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    min-height:100vh;
+    padding:40px 24px 80px;
+  }
+
+  .wrap{max-width:1080px; margin:0 auto;}
+
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:1px solid var(--line); padding-bottom:24px; margin-bottom:32px;
+    flex-wrap:wrap; gap:16px;
+  }
+  .brand-eyebrow{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:0.18em;
+    color:var(--accent); text-transform:uppercase; margin-bottom:8px;
+  }
+  h1{
+    font-family:var(--font-display); font-weight:600; font-size:32px;
+    letter-spacing:-0.01em; color:var(--text);
+  }
+  .blog-url{
+    font-family:var(--font-mono); font-size:13px; color:var(--text-dim); margin-top:6px;
+  }
+  .sync-status{
+    font-family:var(--font-mono); font-size:12px; color:var(--text-dim);
+    display:flex; align-items:center; gap:8px;
+  }
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--text-dim);}
+  .dot.live{background:var(--accent); box-shadow:0 0 8px var(--accent);}
+
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px;}
+  @media(max-width:720px){.grid{grid-template-columns:1fr;}}
+
+  .stat-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:20px 22px;
+  }
+  .stat-label{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em;
+    color:var(--text-dim); text-transform:uppercase; margin-bottom:10px;
+  }
+  .stat-value{
+    font-family:var(--font-display); font-size:30px; font-weight:600; color:var(--text);
+  }
+  .stat-sub{font-size:12px; color:var(--text-dim); margin-top:6px;}
+
+  section{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:24px; margin-bottom:20px;
+  }
+  .section-head{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;
+  }
+  .section-title{
+    font-family:var(--font-display); font-size:18px; font-weight:600;
+  }
+  .section-hint{font-size:12px; color:var(--text-dim); font-family:var(--font-mono);}
+
+  table{width:100%; border-collapse:collapse;}
+  th{
+    text-align:left; font-family:var(--font-mono); font-size:11px; letter-spacing:0.08em;
+    color:var(--text-dim); text-transform:uppercase; padding:8px 10px;
+    border-bottom:1px solid var(--line);
+  }
+  td{
+    padding:12px 10px; font-size:14px; border-bottom:1px solid var(--panel-2);
+  }
+  tr:last-child td{border-bottom:none;}
+  .kw{font-weight:500;}
+  .rank-pill{
+    font-family:var(--font-mono); font-size:13px; font-weight:700;
+    padding:3px 9px; border-radius:20px; display:inline-block; min-width:40px; text-align:center;
+  }
+  .rank-good{background:rgba(61,218,215,0.12); color:var(--accent);}
+  .rank-mid{background:rgba(240,180,41,0.12); color:var(--accent-2);}
+  .rank-bad{background:rgba(251,113,133,0.1); color:var(--down);}
+  .rank-none{color:var(--text-dim); font-family:var(--font-mono); font-size:13px;}
+
+  .empty{
+    text-align:center; padding:36px 20px; color:var(--text-dim); font-size:13px;
+  }
+  .empty-icon{font-family:var(--font-mono); font-size:22px; color:var(--line); margin-bottom:10px;}
+
+  canvas{max-height:220px;}
+
+  .posts-list{display:flex; flex-direction:column; gap:10px;}
+  .post-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 14px; background:var(--panel-2); border-radius:8px; border:1px solid var(--line);
+  }
+  .post-title{font-size:13px; color:var(--text);}
+  .post-date{font-family:var(--font-mono); font-size:11px; color:var(--text-dim);}
+
+  footer{
+    text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--text-dim);
+    margin-top:40px; letter-spacing:0.05em;
+  }
+
+  .view-tabs{display:flex; gap:8px; margin-bottom:28px;}
+  .view-tab{
+    font-family:var(--font-mono); font-size:12px; font-weight:700;
+    padding:8px 18px; border-radius:20px; cursor:pointer;
+    background:var(--panel); border:1px solid var(--line); color:var(--text-dim);
+  }
+  .view-tab.active{background:var(--accent); color:#04302e; border-color:var(--accent);}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .day-btns{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
+  .day-btn{
+    font-family:var(--font-mono); font-size:12px; font-weight:600;
+    padding:9px 16px; border-radius:8px; cursor:pointer;
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+  }
+  .day-btn:hover{border-color:var(--accent); color:var(--accent);}
+  .day-btn:disabled{opacity:0.5; cursor:wait;}
+
+  .keyword-row{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+  .keyword-row input{
+    flex:1; min-width:220px; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; padding:10px 12px; color:var(--text); font-size:13px;
+  }
+  .keyword-row button{
+    font-family:var(--font-mono); font-size:12px; color:var(--text-dim);
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:0 14px; cursor:pointer;
+  }
+  .keyword-row button:hover{color:var(--accent); border-color:var(--accent);}
+
+  .gen-status{font-family:var(--font-mono); font-size:12px; color:var(--text-dim); margin-bottom:8px; min-height:16px;}
+
+  .draft-list{display:flex; flex-direction:column; gap:12px;}
+  .draft-card{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:16px 18px;
+  }
+  .draft-meta{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;
+    font-family:var(--font-mono); font-size:11px; color:var(--text-dim);
+  }
+  .draft-title{font-size:14px; font-weight:600; margin-bottom:8px; color:var(--text);}
+  .draft-body{
+    font-size:13px; color:var(--text-dim); line-height:1.7;
+    margin-bottom:10px;
+  }
+  .draft-actions{display:flex; gap:8px;}
+  .draft-actions button{
+    font-family:var(--font-mono); font-size:11px; padding:6px 12px; border-radius:6px; cursor:pointer;
+    background:var(--panel); border:1px solid var(--line); color:var(--text);
+  }
+  .draft-actions button.copy:hover{border-color:var(--accent); color:var(--accent);}
+  .draft-actions button.del:hover{border-color:var(--down); color:var(--down);}
+
+  .regen-row{display:flex; gap:8px; margin-top:10px;}
+  .regen-row input{
+    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; color:var(--text); font-size:12px;
+  }
+  .regen-row button{
+    font-family:var(--font-mono); font-size:11px; padding:8px 14px; border-radius:6px; cursor:pointer;
+    background:var(--panel); border:1px solid var(--accent); color:var(--accent); white-space:nowrap;
+  }
+  .regen-row button:hover{background:var(--accent); color:#04302e;}
+  .regen-row button:disabled{opacity:0.5; cursor:wait;}
+
+  .kw-candidates{
+    display:none; flex-direction:column; gap:4px; margin-bottom:16px;
+    max-height:280px; overflow-y:auto; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; padding:8px;
+  }
+  .kw-candidates.open{display:flex;}
+  .kw-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 10px; border-radius:6px; cursor:pointer; font-size:13px;
+  }
+  .kw-row:hover{background:var(--panel);}
+  .kw-row.posted{opacity:0.5;}
+  .kw-vol{
+    font-family:var(--font-mono); font-size:11px; color:var(--accent-2);
+    background:rgba(240,180,41,0.1); padding:2px 8px; border-radius:10px;
+  }
+  .kw-vol.none{color:var(--text-dim); background:transparent;}
+  .kw-tag{font-family:var(--font-mono); font-size:10px; color:var(--text-dim); margin-left:6px;}
+
+  .draft-subtitle{
+    font-family:var(--font-display); font-size:15px; font-weight:600;
+    color:var(--accent); margin:14px 0 6px;
+  }
+  .draft-para{margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="brand-eyebrow">Naver Blog · Rank Radar</div>
+      <h1>네이버블로그 관제</h1>
+      <div class="blog-url">blog.naver.com/veluna_co</div>
+    </div>
+    <div class="sync-status">
+      <span class="dot" id="syncDot"></span>
+      <span id="syncText">Supabase 연결 대기중</span>
+    </div>
+  </header>
+
+  <div class="view-tabs">
+    <div class="view-tab active" data-view="dashboard">대시보드</div>
+    <div class="view-tab" data-view="drafts">글감 보관함</div>
+  </div>
+
+  <div id="view-dashboard" class="view active">
+
+  <div class="grid">
+    <div class="stat-card">
+      <div class="stat-label">추적 키워드</div>
+      <div class="stat-value" id="statKeywordCount">–</div>
+      <div class="stat-sub" id="statKeywordSub">등록된 활성 키워드</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">오늘 방문자</div>
+      <div class="stat-value" id="statVisitors">–</div>
+      <div class="stat-sub" id="statVisitorsSub">전일 대비</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">발행 글</div>
+      <div class="stat-value" id="statPosts">–</div>
+      <div class="stat-sub">누적 발행 수</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <div class="section-title">키워드별 순위</div>
+      <div class="section-hint" id="rankUpdated">최근 조회일 –</div>
+    </div>
+    <div id="rankTableWrap">
+      <div class="empty">
+        <div class="empty-icon">◌</div>
+        아직 순위 데이터가 없어요.<br>rank_tracker.py를 실행하면 여기에 자동으로 채워집니다.
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="section-title">방문자 추이</div>
+      <div class="section-hint">최근 30일</div>
+    </div>
+    <div id="visitorChartWrap">
+      <div class="empty">
+        <div class="empty-icon">◌</div>
+        아직 방문자 데이터가 없어요.<br>stats_collector 모듈 연결 후 표시됩니다.
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="section-title">발행 이력</div>
+      <div class="section-hint" id="postCount">0건</div>
+    </div>
+    <div id="postsWrap">
+      <div class="empty">
+        <div class="empty-icon">◌</div>
+        아직 발행 이력이 없어요.
+      </div>
+    </div>
+  </section>
+
+  </div>
+
+  <div id="view-drafts" class="view">
+    <section>
+      <div class="section-head">
+        <div class="section-title">요일별 글감 생성</div>
+        <div class="section-hint">Gemini · 벨루나 지침 기반</div>
+      </div>
+
+      <div class="keyword-row">
+        <input type="text" id="keywordInput" placeholder="키워드 (비워두면 추천 키워드 자동 사용)">
+        <button id="suggestBtn" type="button">키워드 후보 보기</button>
+      </div>
+      <div class="kw-candidates" id="kwCandidates"></div>
+
+      <div class="day-btns" id="dayBtns"></div>
+      <div class="gen-status" id="genStatus"></div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="section-title">글감 보관함</div>
+        <div class="section-hint" id="draftCount">0건</div>
+      </div>
+      <div id="draftsWrap">
+        <div class="empty">
+          <div class="empty-icon">◌</div>
+          아직 생성된 글감이 없어요. 위 요일 버튼을 눌러서 만들어보세요.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>NAVER BLOG MANAGER · veluna_co · powered by Supabase</footer>
+</div>
+
+<script>
+// ============================================================
+// ↓↓↓ 여기 두 줄만 형 Supabase 프로젝트 값으로 채워넣으면 됨
+// control-tower 만들 때 이미 발급받은 값 그대로 쓰면 됨 (project ref: ivlyefexwmjslrlkghlm)
+const SUPABASE_URL = "https://ivlyefexwmjslrlkghlm.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2bHllZmV4d21qc2xybGtnaGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNzMwNDcsImV4cCI6MjA5Njk0OTA0N30.UcGeZbBKr5PfZcAK4RF50E0e2kM57ECM3qBtjBo3Iiw";
+// ↓ Gemini API 키도 여기 넣어줘 (config.json에 넣은 것과 동일한 값, https://aistudio.google.com/apikey 에서 발급)
+const GEMINI_API_KEY = "AIzaSyCkWIpw7e2wzAAJAPI7B7I-LgzXni77Gqk";
+// ============================================================
+
+const DAY_CATEGORIES = [
+  { label: "월요일", short: "월", desc: "웰니스 에센셜" },
+  { label: "화요일", short: "화", desc: "웰니스 팁" },
+  { label: "수요일", short: "수", desc: "공감 스토리" },
+  { label: "목요일", short: "목", desc: "라이프스타일" },
+  { label: "금요일", short: "금", desc: "밤의 큐레이션" },
+  { label: "토요일", short: "토", desc: "주말 리프레시" },
+  { label: "일요일", short: "일", desc: "주말 리프레시" },
+];
+
+const VELUNA_GUIDE = `[벨루나 에디터 포스팅 작성 지침]
+
+[STEP 1]에 포스팅 정보를 입력하면, AI는 해당 요일에 맞는 카테고리 톤앤매너를 반영하여 네이버 SEO 최적화와 벨루나 브랜드 감성이 조화롭게 어우러진 고품질 장문 칼럼을 작성합니다.
+
+### [STEP 2] AI 작성 가이드라인 (핵심 지침)
+
+1. 요일별 카테고리 설정
+- 입력된 요일에 맞춰 글의 카테고리 주제를 자연스럽게 형성하세요.
+  * [월요일] 웰니스 에센셜: 건강/신체 밸런스, 피로 회복
+  * [화요일] 웰니스 팁: 감각을 깨우는 마사지 루틴 및 액션 플랜
+  * [수요일] 공감 스토리: 지친 마음을 어루만지는 감성 에세이
+  * [목요일] 라이프스타일: 공간 연출, 아로마 향, 휴식의 품격
+  * [금요일] 밤의 큐레이션: 주말을 여는 프라이빗 밤의 분위기 세팅
+  * [주말(토/일)] 주말 리프레시: 오롯이 서로에게 집중하는 차분한 에너지 충전
+
+2. 네이버 SEO & 자연스러운 키워드 전략
+- 메인 키워드를 불필요하게 쪼개거나 무리한 대치어로 바꾸지 않고, 문맥상 가장 자연스러운 위치에 직접 사용하세요. (제목 1회, 본문 3~4회)
+- 저속하거나 직접적인 성적 묘사는 배제하고, '삶의 질을 높이는 웰니스 도구'이자 '건강한 라이프스타일'이라는 교양 있는 프레임으로 풀어냅니다.
+- 제목 공식: [벨루나] + [메인 키워드] + [타겟/고민 해결 및 감성적 메시지]
+
+3. 소제목 기반 구조화 & 가독성 최적화
+- 3~4개의 감성적인 소제목으로 구획화하여 시각적 가독성을 높입니다.
+- 모든 이미지는 반드시 '소제목 바로 아래'에 배치하도록 표기합니다. (배치 형태: 소제목 -> [이미지: 상세한 연출 컷 설명] -> 본문 내용)
+- 문단은 모바일 가독성을 고려해 2~4문장 단위로 구성하고 빈 줄로 구분합니다.
+
+4. 필력 중심 페르소나 (벨루나 에디터)
+- 다정하게 대화하듯 독자의 마음을 어루만지는 문체(~해요, ~랍니다, ~해볼까요?)를 사용합니다.
+- 시각, 촉각, 향기 등 감각적 묘사를 풍부하게 살려 서술합니다.
+- 시작: 다정한 첫인사 + 요일 카테고리 주제를 자연스럽게 한 문장으로 녹여서 시작합니다.
+- 마감: 따뜻한 여운이 담긴 벨루나의 맺음 인사로 마무리합니다.
+
+5. 출력 형식 주의사항 (필수, 최우선 준수)
+- 소제목은 ###, ** 같은 마크다운 기호 없이, 반드시 줄 맨 앞에 "##소제목##"을 붙이고 그 뒤에 소제목 문장을 씁니다. (예: ##소제목## 오늘 하루, 나를 위한 시간)
+- 이모지나 특수기호는 사용하지 않습니다.
+- [이미지: ...] 표기는 그대로 유지합니다.
+- 감성적으로 스티커를 넣으면 좋을 위치에는 문장 끝에 [스티커] 표시를 남깁니다. (문단당 최대 1개)
+
+6. 하단 고지 및 태그
+- 하단 고지: ※ 본 콘텐츠는 웰니스 브랜드 벨루나(Veluna)의 공식 에세이입니다.
+- SEO 태그 세트: #벨루나 #벨루나몰 #성인용품 #성인용품추천 #프라이빗홈케어 #자기돌봄 #부부공감 #건강한라이프스타일 #신혼부부선물 #감각깨우기`;
+
+let supabaseClient = null;
+if (SUPABASE_URL.startsWith("http")) {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+function rankClass(rank){
+  if (rank === null || rank === undefined) return 'rank-none';
+  if (rank <= 10) return 'rank-good';
+  if (rank <= 30) return 'rank-mid';
+  return 'rank-bad';
+}
+
+async function loadDashboard(){
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+
+  if (!supabaseClient) {
+    txt.textContent = 'Supabase 키 미설정 (스크립트 하단 참고)';
+    return;
+  }
+
+  try {
+    // 키워드
+    const { data: keywords, error: kwErr } = await supabaseClient
+      .from('nb_keywords').select('*').eq('status', 'active');
+    if (kwErr) throw kwErr;
+
+    document.getElementById('statKeywordCount').textContent = keywords.length;
+
+    // 최신 순위 (키워드별 가장 최근 checked_date 1건)
+    const { data: ranks } = await supabaseClient
+      .from('nb_rank_history')
+      .select('*, nb_keywords(keyword)')
+      .order('checked_date', { ascending: false });
+
+    if (ranks && ranks.length > 0) {
+      const latestByKeyword = {};
+      ranks.forEach(r => {
+        const k = r.keyword_id;
+        if (!latestByKeyword[k]) latestByKeyword[k] = r;
+      });
+      const rows = Object.values(latestByKeyword);
+
+      let html = '<table><thead><tr><th>키워드</th><th>통합검색</th><th>블로그탭</th><th>조회일</th></tr></thead><tbody>';
+      rows.forEach(r => {
+        const kwName = r.nb_keywords ? r.nb_keywords.keyword : '-';
+        html += `<tr>
+          <td class="kw">${kwName}</td>
+          <td><span class="rank-pill ${rankClass(r.integrated_rank)}">${r.integrated_rank ?? '–'}</span></td>
+          <td><span class="rank-pill ${rankClass(r.blog_tab_rank)}">${r.blog_tab_rank ?? '–'}</span></td>
+          <td class="rank-none">${r.checked_date}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      document.getElementById('rankTableWrap').innerHTML = html;
+      document.getElementById('rankUpdated').textContent = '최근 조회일 ' + rows[0].checked_date;
+    }
+
+    // 방문자 통계
+    const { data: stats } = await supabaseClient
+      .from('nb_daily_stats').select('*').order('stat_date', { ascending: true }).limit(30);
+
+    if (stats && stats.length > 0) {
+      const today = stats[stats.length - 1];
+      const yesterday = stats.length > 1 ? stats[stats.length - 2] : null;
+      document.getElementById('statVisitors').textContent = today.visitor_count ?? '–';
+      if (yesterday) {
+        const diff = today.visitor_count - yesterday.visitor_count;
+        document.getElementById('statVisitorsSub').textContent =
+          (diff >= 0 ? '+' : '') + diff + ' (전일 대비)';
+      }
+
+      document.getElementById('visitorChartWrap').innerHTML = '<canvas id="visitorChart"></canvas>';
+      new Chart(document.getElementById('visitorChart'), {
+        type: 'line',
+        data: {
+          labels: stats.map(s => s.stat_date),
+          datasets: [{
+            data: stats.map(s => s.visitor_count),
+            borderColor: '#3ddad7',
+            backgroundColor: 'rgba(61,218,215,0.08)',
+            fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2
+          }]
+        },
+        options: {
+          plugins:{legend:{display:false}},
+          scales:{
+            x:{grid:{color:'#1f2937'}, ticks:{color:'#8791a8', font:{family:'JetBrains Mono', size:10}}},
+            y:{grid:{color:'#1f2937'}, ticks:{color:'#8791a8', font:{family:'JetBrains Mono', size:10}}}
+          }
+        }
+      });
+    }
+
+    // 발행 이력
+    const { data: posts } = await supabaseClient
+      .from('nb_posts').select('*').order('published_date', { ascending: false }).limit(15);
+
+    document.getElementById('statPosts').textContent = posts ? posts.length : 0;
+    document.getElementById('postCount').textContent = (posts ? posts.length : 0) + '건';
+
+    if (posts && posts.length > 0) {
+      let html = '<div class="posts-list">';
+      posts.forEach(p => {
+        html += `<div class="post-row">
+          <span class="post-title">${p.title ?? '(제목 없음)'}</span>
+          <span class="post-date">${p.published_date ?? ''}</span>
+        </div>`;
+      });
+      html += '</div>';
+      document.getElementById('postsWrap').innerHTML = html;
+    }
+
+    dot.classList.add('live');
+    txt.textContent = 'Supabase 연결됨 · ' + new Date().toLocaleTimeString('ko-KR');
+
+  } catch(e) {
+    txt.textContent = '연결 오류: ' + e.message;
+    console.error(e);
+  }
+}
+
+loadDashboard();
+setInterval(loadDashboard, 60000); // 1분마다 자동 새로고침
+
+// ===== 뷰 전환 (대시보드 / 글감 보관함) =====
+document.querySelectorAll('.view-tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('view-' + tab.dataset.view).classList.add('active');
+  };
+});
+
+// ===== 요일 버튼 렌더링 =====
+const dayBtnsEl = document.getElementById('dayBtns');
+DAY_CATEGORIES.forEach(day => {
+  const btn = document.createElement('button');
+  btn.className = 'day-btn';
+  btn.textContent = `${day.short} · ${day.desc}`;
+  btn.onclick = () => generateDraft(day);
+  dayBtnsEl.appendChild(btn);
+});
+
+// ===== 키워드 추천 =====
+async function fetchKeywordCandidates() {
+  const { data: keywords } = await supabaseClient
+    .from('nb_keywords').select('id,keyword,search_volume').eq('status', 'active');
+  const { data: posts } = await supabaseClient
+    .from('nb_posts').select('keyword_id');
+
+  if (!keywords || !keywords.length) return [];
+  const postedIds = new Set((posts || []).map(p => p.keyword_id).filter(Boolean));
+
+  return [...keywords]
+    .map(k => ({ ...k, posted: postedIds.has(k.id) }))
+    .sort((a, b) => (b.search_volume ?? -1) - (a.search_volume ?? -1));
+}
+
+async function suggestKeyword() {
+  if (!supabaseClient) return;
+  const candidates = await fetchKeywordCandidates();
+  if (!candidates.length) return;
+  const notPosted = candidates.filter(k => !k.posted);
+  const picked = (notPosted.length ? notPosted : candidates)[0];
+  document.getElementById('keywordInput').value = picked.keyword;
+}
+
+async function toggleKeywordCandidates() {
+  const box = document.getElementById('kwCandidates');
+  if (box.classList.contains('open')) {
+    box.classList.remove('open');
+    return;
+  }
+
+  const candidates = await fetchKeywordCandidates();
+  if (!candidates.length) {
+    box.innerHTML = `<div class="kw-row">등록된 키워드가 없어요.</div>`;
+    box.classList.add('open');
+    return;
+  }
+
+  box.innerHTML = candidates.map(k => {
+    const volLabel = (k.search_volume === null || k.search_volume === undefined)
+      ? '<span class="kw-vol none">검색량 미확인</span>'
+      : `<span class="kw-vol">${k.search_volume.toLocaleString()}</span>`;
+    const postedTag = k.posted ? '<span class="kw-tag">(이미 포스팅)</span>' : '';
+    return `<div class="kw-row ${k.posted ? 'posted' : ''}" data-kw="${k.keyword}">
+      <span>${k.keyword}${postedTag}</span>
+      ${volLabel}
+    </div>`;
+  }).join('');
+
+  box.querySelectorAll('[data-kw]').forEach(row => {
+    row.onclick = () => {
+      document.getElementById('keywordInput').value = row.dataset.kw;
+      box.classList.remove('open');
+    };
+  });
+
+  box.classList.add('open');
+}
+
+document.getElementById('suggestBtn').onclick = toggleKeywordCandidates;
+suggestKeyword();
+
+// ===== Gemini로 글감 생성 =====
+async function callGemini(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error?.message || 'Gemini 호출 실패');
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+async function generateDraft(day) {
+  const statusEl = document.getElementById('genStatus');
+  const keywordInput = document.getElementById('keywordInput');
+
+  if (!GEMINI_API_KEY || GEMINI_API_KEY.startsWith('여기에')) {
+    statusEl.textContent = 'Gemini API 키가 설정 안 되어 있어요 (스크립트 상단 참고)';
+    return;
+  }
+
+  let keyword = keywordInput.value.trim();
+  if (!keyword) {
+    await suggestKeyword();
+    keyword = keywordInput.value.trim();
+  }
+  if (!keyword) {
+    statusEl.textContent = '등록된 키워드가 없어요. 순위추적 쪽에 키워드를 먼저 등록해줘.';
+    return;
+  }
+
+  document.querySelectorAll('.day-btn').forEach(b => b.disabled = true);
+  statusEl.textContent = `'${keyword}' 키워드로 ${day.label}(${day.desc}) 글 생성 중...`;
+
+  try {
+    const prompt = `${VELUNA_GUIDE}
+
+---
+### [STEP 1] 입력 데이터
+- 오늘 날짜 또는 요일: ${day.label}
+- 메인 핵심 키워드: ${keyword}
+- 오늘 포스팅의 핵심 내용: (자유롭게 구성)
+
+위 지침을 100% 따라서 글을 작성해줘.
+출력 형식은 반드시 아래처럼 정확히 지켜줘 (구분자 그대로 사용):
+
+[제목]
+(여기에 제목)
+
+[본문]
+(여기에 본문 전체)`;
+
+    const text = await callGemini(prompt);
+    const titleMatch = text.match(/\[제목\]\s*([\s\S]+?)\s*\[본문\]/);
+    const bodyMatch = text.match(/\[본문\]\s*([\s\S]+)/);
+    const title = titleMatch ? titleMatch[1].trim() : `[벨루나] ${keyword}`;
+    const body = bodyMatch ? bodyMatch[1].trim() : text.trim();
+
+    const { error } = await supabaseClient.from('nb_drafts').insert({
+      day_label: day.label, keyword, title, body
+    });
+    if (error) throw error;
+
+    statusEl.textContent = `'${title}' 글감 생성 완료 -> 아래 글감 보관함에서 확인`;
+    keywordInput.value = '';
+    await suggestKeyword();
+    await loadDrafts();
+  } catch (e) {
+    statusEl.textContent = '생성 실패: ' + e.message;
+    console.error(e);
+  } finally {
+    document.querySelectorAll('.day-btn').forEach(b => b.disabled = false);
+  }
+}
+
+// ===== 소제목 마커(##소제목##) 파싱 =====
+function escapeHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderBodyHtml(body) {
+  if (!body) return '';
+  return body.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return '';
+    const m = trimmed.match(/^##소제목##\s*(.+)$/);
+    if (m) return `<div class="draft-subtitle">${escapeHtml(m[1])}</div>`;
+    return `<p class="draft-para">${escapeHtml(trimmed)}</p>`;
+  }).join('');
+}
+
+function cleanBodyText(body) {
+  if (!body) return '';
+  return body.split('\n').map(line => line.replace(/^\s*##소제목##\s*/, '')).join('\n');
+}
+
+// ===== 글감 목록 =====
+async function loadDrafts() {
+  if (!supabaseClient) return;
+  const { data: drafts } = await supabaseClient
+    .from('nb_drafts').select('*').order('created_at', { ascending: false });
+
+  document.getElementById('draftCount').textContent = (drafts ? drafts.length : 0) + '건';
+
+  if (!drafts || !drafts.length) {
+    document.getElementById('draftsWrap').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">◌</div>
+        아직 생성된 글감이 없어요. 위 요일 버튼을 눌러서 만들어보세요.
+      </div>`;
+    return;
+  }
+
+  let html = '<div class="draft-list">';
+  drafts.forEach(d => {
+    const created = d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : '';
+    html += `<div class="draft-card">
+      <div class="draft-meta"><span>${d.day_label || ''} · ${d.keyword || ''}</span><span>${created}</span></div>
+      <div class="draft-title">${d.title || '(제목 없음)'}</div>
+      <div class="draft-body">${renderBodyHtml(d.body)}</div>
+      <div class="draft-actions">
+        <button class="copy" data-copy-id="${d.id}">전체 복사</button>
+        <button class="del" data-del-id="${d.id}">삭제</button>
+      </div>
+      <div class="regen-row">
+        <input type="text" placeholder="수정 지시 (예: 더 짧게, 도입부 다시, 소제목 바꿔줘)" data-regen-input="${d.id}">
+        <button data-regen-id="${d.id}">다시쓰기</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  document.getElementById('draftsWrap').innerHTML = html;
+
+  document.querySelectorAll('[data-copy-id]').forEach(btn => {
+    btn.onclick = async () => {
+      const d = drafts.find(x => String(x.id) === btn.dataset.copyId);
+      if (!d) return;
+      await navigator.clipboard.writeText(`${d.title}\n\n${cleanBodyText(d.body)}`);
+      const original = btn.textContent;
+      btn.textContent = '복사됨!';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    };
+  });
+
+  document.querySelectorAll('[data-del-id]').forEach(btn => {
+    btn.onclick = async () => {
+      if (!confirm('이 글감을 삭제할까요?')) return;
+      await supabaseClient.from('nb_drafts').delete().eq('id', btn.dataset.delId);
+      loadDrafts();
+    };
+  });
+
+  document.querySelectorAll('[data-regen-id]').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.regenId;
+      const d = drafts.find(x => String(x.id) === id);
+      const input = document.querySelector(`[data-regen-input="${id}"]`);
+      const instruction = input ? input.value.trim() : '';
+      if (!d) return;
+      if (!instruction) {
+        input.placeholder = '어떻게 고칠지 먼저 입력해줘!';
+        return;
+      }
+      regenerateDraft(d, instruction, btn, input);
+    };
+  });
+}
+
+async function regenerateDraft(draft, instruction, btn, input) {
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = '다시 쓰는 중...';
+
+  try {
+    const prompt = `${VELUNA_GUIDE}
+
+---
+### 재작성 요청
+아래는 '${draft.day_label || ''}' 카테고리, 키워드 '${draft.keyword || ''}'로 이미 작성된 글이야.
+
+[이전 제목]
+${draft.title}
+
+[이전 본문]
+${draft.body}
+
+### 사용자 수정 지시
+${instruction}
+
+위 지침(톤앤매너·SEO·출력형식 규칙)을 그대로 지키면서, 사용자 수정 지시를 반영해서 전체 글을 처음부터 다시 써줘.
+출력 형식은 반드시 아래처럼 정확히 지켜줘 (구분자 그대로 사용):
+
+[제목]
+(여기에 제목)
+
+[본문]
+(여기에 본문 전체)`;
+
+    const text = await callGemini(prompt);
+    const titleMatch = text.match(/\[제목\]\s*([\s\S]+?)\s*\[본문\]/);
+    const bodyMatch = text.match(/\[본문\]\s*([\s\S]+)/);
+    const newTitle = titleMatch ? titleMatch[1].trim() : draft.title;
+    const newBody = bodyMatch ? bodyMatch[1].trim() : text.trim();
+
+    const { error } = await supabaseClient
+      .from('nb_drafts')
+      .update({ title: newTitle, body: newBody })
+      .eq('id', draft.id);
+    if (error) throw error;
+
+    if (input) input.value = '';
+    await loadDrafts();
+  } catch (e) {
+    alert('다시쓰기 실패: ' + e.message);
+    console.error(e);
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+loadDrafts();
+</script>
+</body>
+</html>
