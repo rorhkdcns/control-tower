@@ -433,14 +433,14 @@ const KEYWORD_SEARCH_PROXY = "https://coupang-proxy-73un.vercel.app/api/keyword-
 const RANK_CHECK_PROXY = "https://coupang-proxy-73un.vercel.app/api/rank-check";
 // ============================================================
 
-const DAY_CATEGORIES = [
-  { label: "월요일", short: "월", desc: "웰니스 에센셜" },
-  { label: "화요일", short: "화", desc: "웰니스 팁" },
-  { label: "수요일", short: "수", desc: "공감 스토리" },
-  { label: "목요일", short: "목", desc: "라이프스타일" },
-  { label: "금요일", short: "금", desc: "밤의 큐레이션" },
-  { label: "토요일", short: "토", desc: "주말 리프레시" },
-  { label: "일요일", short: "일", desc: "주말 리프레시" },
+const DEFAULT_WRITE_BUTTONS = [
+  { short: "월", desc: "웰니스 에센셜", gemsUrl: "" },
+  { short: "화", desc: "웰니스 팁", gemsUrl: "" },
+  { short: "수", desc: "공감 스토리", gemsUrl: "" },
+  { short: "목", desc: "라이프스타일", gemsUrl: "" },
+  { short: "금", desc: "밤의 큐레이션", gemsUrl: "" },
+  { short: "토", desc: "주말 리프레시", gemsUrl: "" },
+  { short: "일", desc: "주말 리프레시", gemsUrl: "" },
 ];
 
 // ↓ 새 프로젝트는 modules/keyword_discovery.py --register 로 만들면 여기 자동으로 나타남
@@ -1096,47 +1096,98 @@ document.getElementById('refreshRankBtn').onclick = async () => {
   }
 };
 
-// ===== 요일 버튼: 입력값 복사 + Gems 새 탭 열기 (더블클릭으로 이름 수정 가능) =====
+// ===== 글쓰기 버튼: 자유롭게 추가/삭제/이름수정/Gems 링크 지정 가능 =====
 const dayBtnsEl = document.getElementById('dayBtns');
 
-DAY_CATEGORIES.forEach(day => {
-  const stored = localStorage.getItem('nb_day_label_' + day.short);
-  if (stored) day.desc = stored;
-});
+let writeButtons = [];
+try {
+  const stored = localStorage.getItem('nb_write_buttons');
+  writeButtons = stored ? JSON.parse(stored) : DEFAULT_WRITE_BUTTONS.map(b => ({ ...b }));
+} catch (e) {
+  writeButtons = DEFAULT_WRITE_BUTTONS.map(b => ({ ...b }));
+}
+
+function saveWriteButtons() {
+  localStorage.setItem('nb_write_buttons', JSON.stringify(writeButtons));
+}
 
 function renderDayButtons() {
   dayBtnsEl.innerHTML = '';
-  DAY_CATEGORIES.forEach(day => {
+  writeButtons.forEach((btnData, idx) => {
     const wrap = document.createElement('span');
-    wrap.style.cssText = 'display:inline-flex; align-items:center; gap:4px;';
+    wrap.style.cssText = 'display:inline-flex; align-items:center; gap:2px;';
 
     const btn = document.createElement('button');
     btn.className = 'day-btn';
-    btn.textContent = `${day.short} · ${day.desc}`;
-    btn.onclick = () => sendToGems(day);
+    btn.textContent = `${btnData.short} · ${btnData.desc}`;
+    btn.title = btnData.gemsUrl ? '전용 Gems로 이동' : '기본 Gems로 이동';
+    btn.onclick = () => sendToGems(btnData);
     wrap.appendChild(btn);
 
     const editIcon = document.createElement('span');
     editIcon.textContent = '✎';
-    editIcon.title = '이 버튼 이름 수정';
-    editIcon.style.cssText = 'cursor:pointer; color:var(--text-dim); font-size:12px; margin-left:-6px;';
+    editIcon.title = '이름 수정';
+    editIcon.style.cssText = 'cursor:pointer; color:var(--text-dim); font-size:12px; margin-left:-4px;';
     editIcon.onclick = (e) => {
       e.stopPropagation();
-      const newLabel = prompt(`'${day.short}요일' 버튼 이름을 입력해줘`, day.desc);
+      const newLabel = prompt(`버튼 이름을 입력해줘`, btnData.desc);
       if (newLabel && newLabel.trim()) {
-        day.desc = newLabel.trim();
-        localStorage.setItem('nb_day_label_' + day.short, day.desc);
+        btnData.desc = newLabel.trim();
+        saveWriteButtons();
         renderDayButtons();
       }
     };
     wrap.appendChild(editIcon);
 
+    const gemsIcon = document.createElement('span');
+    gemsIcon.textContent = '🔗';
+    gemsIcon.title = '이 버튼이 열 Gems 링크 지정 (비우면 기본 Gems 사용)';
+    gemsIcon.style.cssText = 'cursor:pointer; color:var(--text-dim); font-size:11px;';
+    gemsIcon.onclick = (e) => {
+      e.stopPropagation();
+      const newUrl = prompt(`'${btnData.desc}' 버튼이 열 Gems 링크를 입력해줘 (비우면 기본 Gems 사용)`, btnData.gemsUrl || '');
+      if (newUrl !== null) {
+        btnData.gemsUrl = newUrl.trim();
+        saveWriteButtons();
+        renderDayButtons();
+      }
+    };
+    wrap.appendChild(gemsIcon);
+
+    const delIcon = document.createElement('span');
+    delIcon.textContent = '✕';
+    delIcon.title = '버튼 삭제';
+    delIcon.style.cssText = 'cursor:pointer; color:var(--text-dim); font-size:11px;';
+    delIcon.onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm(`'${btnData.desc}' 버튼을 삭제할까요?`)) return;
+      writeButtons.splice(idx, 1);
+      saveWriteButtons();
+      renderDayButtons();
+    };
+    wrap.appendChild(delIcon);
+
     dayBtnsEl.appendChild(wrap);
   });
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'day-btn';
+  addBtn.style.cssText = 'border-style:dashed; color:var(--text-dim);';
+  addBtn.textContent = '+ 버튼 추가';
+  addBtn.onclick = () => {
+    const label = prompt('새 버튼 이름 (예: 뷰카, 이벤트 안내...)');
+    if (!label || !label.trim()) return;
+    const short = prompt('버튼에 표시할 짧은 이름 (예: 뷰카)', label.trim().slice(0, 4)) || label.trim().slice(0, 4);
+    const gemsUrl = prompt('이 버튼이 열 Gems 링크 (비우면 기본 Gems 사용)', '') || '';
+    writeButtons.push({ short: short.trim(), desc: label.trim(), gemsUrl: gemsUrl.trim() });
+    saveWriteButtons();
+    renderDayButtons();
+  };
+  dayBtnsEl.appendChild(addBtn);
 }
 renderDayButtons();
 
-async function sendToGems(day) {
+async function sendToGems(btnData) {
   const statusEl = document.getElementById('genStatus');
   const keywordInput = document.getElementById('keywordInput');
 
@@ -1150,14 +1201,16 @@ async function sendToGems(day) {
     return;
   }
 
-  const inputText = `오늘 날짜 또는 요일: ${day.label}
+  const inputText = `오늘 날짜 또는 요일: ${btnData.desc}
 메인 핵심 키워드: ${keyword}
 오늘 포스팅의 핵심 내용: (자유롭게 작성)`;
 
+  const targetGems = btnData.gemsUrl || GEMS_URL;
+
   try {
     await navigator.clipboard.writeText(inputText);
-    window.open(GEMS_URL, '_blank');
-    statusEl.textContent = `'${keyword}' / ${day.label}(${day.desc}) 입력값이 복사됐어요. Gems 탭에 붙여넣기만 하면 돼요.`;
+    window.open(targetGems, '_blank');
+    statusEl.textContent = `'${keyword}' / ${btnData.desc} 입력값이 복사됐어요. Gems 탭에 붙여넣기만 하면 돼요.`;
   } catch (e) {
     statusEl.textContent = '클립보드 복사 실패: ' + e.message;
   }
