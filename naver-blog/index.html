@@ -61,6 +61,34 @@
   .dot{width:7px; height:7px; border-radius:50%; background:var(--text-dim);}
   .dot.live{background:var(--accent); box-shadow:0 0 8px var(--accent);}
 
+  .project-select{
+    font-family:var(--font-mono); font-size:12px; font-weight:600;
+    background:var(--panel); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:8px 12px; cursor:pointer;
+  }
+  .project-mgmt-btn{
+    font-family:var(--font-mono); font-size:12px; color:var(--text-dim);
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    padding:8px 10px; cursor:pointer;
+  }
+  .project-mgmt-btn:hover{color:var(--accent); border-color:var(--accent);}
+  .project-form{
+    display:none; flex-direction:column; gap:8px; margin-top:12px;
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:14px;
+  }
+  .project-form.open{display:flex;}
+  .project-form input{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; color:var(--text); font-size:13px;
+  }
+  .project-form-row{display:flex; gap:8px; flex-wrap:wrap;}
+  .project-form-row button{
+    font-family:var(--font-mono); font-size:12px; padding:8px 14px; border-radius:6px; cursor:pointer;
+    border:1px solid var(--line); background:var(--panel); color:var(--text);
+  }
+  .project-form-row button.primary{background:var(--accent); color:#04302e; border-color:var(--accent);}
+  .project-form-row button.danger:hover{border-color:var(--down); color:var(--down);}
+
   .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px;}
   @media(max-width:720px){.grid{grid-template-columns:1fr;}}
 
@@ -169,22 +197,130 @@
   }
   .kw-vol.none{color:var(--text-dim); background:transparent;}
   .kw-tag{font-family:var(--font-mono); font-size:10px; color:var(--text-dim); margin-left:6px;}
+
+  .search-row{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
+  .search-row input{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; color:var(--text); font-size:13px;
+  }
+  .search-row input#searchTopic{flex:1; min-width:160px;}
+  .search-row input#searchBlogUrl{flex:2; min-width:220px;}
+  .search-row button{
+    font-family:var(--font-mono); font-size:12px; font-weight:700; padding:0 18px; border-radius:8px; cursor:pointer;
+    background:var(--accent); color:#04302e; border:none;
+  }
+  .search-row button:disabled{opacity:0.5; cursor:wait;}
+  .search-status{font-family:var(--font-mono); font-size:12px; color:var(--text-dim); margin-bottom:10px; min-height:16px;}
+  .search-results{display:flex; flex-direction:column; gap:4px; max-height:340px; overflow-y:auto;}
+  .search-results-actions{margin-top:12px; display:flex; gap:8px;}
+  .search-results-actions button{
+    font-family:var(--font-mono); font-size:12px; padding:8px 16px; border-radius:8px; cursor:pointer;
+    background:var(--panel-2); border:1px solid var(--accent); color:var(--accent);
+  }
+
+  #authScreen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column;
+  }
+  #authScreen.hidden{display:none;}
+  .auth-box{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:32px;
+    width:100%; max-width:380px;
+  }
+  .auth-title{font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:6px;}
+  .auth-sub{font-size:12px; color:var(--text-dim); margin-bottom:20px;}
+  .user-tabs{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;}
+  .user-tab{
+    font-family:var(--font-mono); font-size:12px; font-weight:600; padding:8px 14px; border-radius:8px;
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); cursor:pointer;
+  }
+  .user-tab:hover{border-color:var(--accent); color:var(--accent);}
+  .user-tab.add{border-style:dashed; color:var(--text-dim);}
+  .auth-form input{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; color:var(--text); font-size:13px; margin-bottom:10px;
+  }
+  .auth-form button{
+    width:100%; font-family:var(--font-mono); font-size:13px; font-weight:700; padding:10px; border-radius:8px;
+    cursor:pointer; background:var(--accent); color:#04302e; border:none; margin-top:4px;
+  }
+  .auth-back{font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:14px; display:inline-block;}
+  .auth-error{font-size:12px; color:var(--down); margin-top:8px; min-height:14px;}
+  #mainContent.hidden{display:none;}
+  .logout-btn{
+    font-family:var(--font-mono); font-size:11px; color:var(--text-dim); background:none; border:none; cursor:pointer;
+  }
+  .admin-badge{
+    font-family:var(--font-mono); font-size:10px; color:var(--accent-2); background:rgba(240,180,41,0.12);
+    padding:2px 8px; border-radius:10px; margin-left:6px;
+  }
 </style>
 </head>
 <body>
+
+<div id="authScreen">
+  <div class="auth-box">
+    <div id="authStepSelect">
+      <div class="auth-title">네이버블로그 관제</div>
+      <div class="auth-sub">control-tower 계정으로 로그인해줘</div>
+      <div class="user-tabs" id="userTabs"><span style="font-size:12px; color:var(--text-dim);">불러오는 중...</span></div>
+    </div>
+
+    <div id="authStepPassword" style="display:none;">
+      <span class="auth-back" id="authBackBtn">← 뒤로</span>
+      <div class="auth-title" id="selectedUserLabel"></div>
+      <div class="auth-form">
+        <input type="password" id="authPasswordInput" placeholder="비밀번호">
+        <button id="authSubmitBtn">입장하기</button>
+      </div>
+    </div>
+
+    <div id="authStepNew" style="display:none;">
+      <span class="auth-back" id="authBackBtn2">← 뒤로</span>
+      <div class="auth-title">새 사용자 추가</div>
+      <div class="auth-form">
+        <input type="text" id="newUsernameInput" placeholder="이름">
+        <input type="password" id="newPasswordInput" placeholder="비밀번호 (6자 이상)">
+        <button id="newUserSubmitBtn">추가하고 입장하기</button>
+      </div>
+    </div>
+
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<div id="mainContent" class="hidden">
 <div class="wrap">
 
   <header>
     <div>
       <div class="brand-eyebrow">Naver Blog · Rank Radar</div>
       <h1>네이버블로그 관제</h1>
-      <div class="blog-url">blog.naver.com/veluna_co</div>
+      <div class="blog-url" id="blogUrlLabel">blog.naver.com/veluna_co</div>
     </div>
-    <div class="sync-status">
-      <span class="dot" id="syncDot"></span>
-      <span id="syncText">Supabase 연결 대기중</span>
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <select class="project-select" id="projectSelect"></select>
+      <button class="project-mgmt-btn" id="editProjectBtn" title="현재 프로젝트 수정">수정</button>
+      <button class="project-mgmt-btn" id="newProjectBtn" title="새 프로젝트 추가">+ 새 프로젝트</button>
+      <div class="sync-status">
+        <span class="dot" id="syncDot"></span>
+        <span id="syncText">Supabase 연결 대기중</span>
+        <span id="currentUserLabel"></span>
+        <button class="logout-btn" id="logoutBtn">로그아웃</button>
+      </div>
     </div>
   </header>
+
+  <div class="project-form" id="projectForm">
+    <div class="project-form-row">
+      <input type="text" id="pfSlug" placeholder="프로젝트 이름 (예: 가발)" style="flex:1; min-width:160px;">
+      <input type="text" id="pfBlogUrl" placeholder="블로그 주소 (예: blog.naver.com/xxxx)" style="flex:2; min-width:220px;">
+    </div>
+    <div class="project-form-row">
+      <button class="primary" id="pfSaveBtn">저장</button>
+      <button id="pfCancelBtn">취소</button>
+      <button class="danger" id="pfDeleteBtn" style="margin-left:auto;">이 프로젝트 삭제</button>
+    </div>
+  </div>
 
   <div class="grid">
     <div class="stat-card">
@@ -203,6 +339,24 @@
       <div class="stat-sub">누적 발행 수</div>
     </div>
   </div>
+
+  <section>
+    <div class="section-head">
+      <div class="section-title">새 주제 키워드 검색</div>
+      <div class="section-hint">네이버 검색광고 API</div>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="searchTopic" placeholder="주제 (예: 가발, 캠핑용품, 강아지사료...)">
+      <input type="text" id="searchBlogUrl" placeholder="블로그 주소 (새 주제 저장할 때만 필요, 예: blog.naver.com/xxxx)">
+      <button id="searchBtn" type="button">검색</button>
+    </div>
+    <div class="search-status" id="searchStatus">주제를 입력하고 검색하면 연관 키워드가 검색량 순으로 나와요.</div>
+    <div class="search-results" id="searchResults"></div>
+    <div class="search-results-actions" id="searchActions" style="display:none;">
+      <button id="saveSearchBtn">이 결과 전부 저장</button>
+    </div>
+  </section>
 
   <section>
     <div class="section-head">
@@ -259,7 +413,8 @@
     </div>
   </section>
 
-  <footer>NAVER BLOG MANAGER · veluna_co · powered by Supabase</footer>
+  <footer>NAVER BLOG MANAGER · powered by Supabase</footer>
+</div>
 </div>
 
 <script>
@@ -269,6 +424,8 @@ const SUPABASE_URL = "https://ivlyefexwmjslrlkghlm.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2bHllZmV4d21qc2xybGtnaGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNzMwNDcsImV4cCI6MjA5Njk0OTA0N30.UcGeZbBKr5PfZcAK4RF50E0e2kM57ECM3qBtjBo3Iiw";
 // ↓ 형이 만든 Gemini Gems 링크
 const GEMS_URL = "https://gemini.google.com/gem/4dfc02aa2d0b";
+// ↓ Vercel에 배포한 api-keyword-search.js의 실제 주소 (예: https://coupang-proxy.vercel.app/api/keyword-search)
+const KEYWORD_SEARCH_PROXY = "여기에_Vercel_프록시_주소_입력";
 // ============================================================
 
 const DAY_CATEGORIES = [
@@ -281,10 +438,313 @@ const DAY_CATEGORIES = [
   { label: "일요일", short: "일", desc: "주말 리프레시" },
 ];
 
+// ↓ 새 프로젝트는 modules/keyword_discovery.py --register 로 만들면 여기 자동으로 나타남
+let PROJECTS = {};
+let currentProject = localStorage.getItem('nb_current_project') || null;
+
 let supabaseClient = null;
 if (SUPABASE_URL.startsWith("http")) {
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
+
+// ===== 로그인 (control-tower와 동일한 계정/방식 재사용) =====
+const EMAIL_DOMAIN = 'controltower.local';
+const ADMIN_USER_ID = 'bc2698b3-6eec-4e99-b92e-3f31b24fdc17';
+let selectedUsername = null;
+let currentUserId = null;
+
+async function usernameToEmail(username) {
+  const enc = new TextEncoder().encode(username.trim().toLowerCase());
+  const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+  const hex = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return 'u' + hex.slice(0, 24) + '@' + EMAIL_DOMAIN;
+}
+
+function showAuthError(msg) { document.getElementById('authError').textContent = msg; }
+function hideAuthError() { document.getElementById('authError').textContent = ''; }
+
+function showAuthStep(step) {
+  document.getElementById('authStepSelect').style.display = step === 'select' ? 'block' : 'none';
+  document.getElementById('authStepPassword').style.display = step === 'password' ? 'block' : 'none';
+  document.getElementById('authStepNew').style.display = step === 'new' ? 'block' : 'none';
+  hideAuthError();
+}
+
+async function loadUserTabs() {
+  const tabsEl = document.getElementById('userTabs');
+  tabsEl.innerHTML = '<span style="font-size:12px; color:var(--text-dim);">불러오는 중...</span>';
+  try {
+    const { data, error } = await supabaseClient.from('dashboard_profiles').select('username').order('created_at', { ascending: true });
+    if (error) throw error;
+    tabsEl.innerHTML = '';
+    (data || []).forEach(row => {
+      const btn = document.createElement('div');
+      btn.className = 'user-tab';
+      btn.textContent = row.username;
+      btn.onclick = () => selectUser(row.username);
+      tabsEl.appendChild(btn);
+    });
+    const addBtn = document.createElement('div');
+    addBtn.className = 'user-tab add';
+    addBtn.textContent = '+ 사용자 추가';
+    addBtn.onclick = () => showAuthStep('new');
+    tabsEl.appendChild(addBtn);
+  } catch (e) {
+    tabsEl.innerHTML = '';
+    const addBtn = document.createElement('div');
+    addBtn.className = 'user-tab add';
+    addBtn.textContent = '+ 사용자 추가';
+    addBtn.onclick = () => showAuthStep('new');
+    tabsEl.appendChild(addBtn);
+  }
+}
+
+function selectUser(username) {
+  selectedUsername = username;
+  document.getElementById('selectedUserLabel').textContent = username;
+  document.getElementById('authPasswordInput').value = '';
+  showAuthStep('password');
+  document.getElementById('authPasswordInput').focus();
+}
+
+document.getElementById('authBackBtn').onclick = () => { showAuthStep('select'); loadUserTabs(); };
+document.getElementById('authBackBtn2').onclick = () => { showAuthStep('select'); loadUserTabs(); };
+
+document.getElementById('authSubmitBtn').onclick = async () => {
+  const password = document.getElementById('authPasswordInput').value;
+  hideAuthError();
+  if (!password) { showAuthError('비밀번호를 입력해줘.'); return; }
+  const btn = document.getElementById('authSubmitBtn');
+  btn.disabled = true; btn.textContent = '확인 중...';
+  try {
+    const email = await usernameToEmail(selectedUsername);
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    await onAuthReady();
+  } catch (e) {
+    showAuthError('비밀번호가 올바르지 않아요.');
+    btn.disabled = false; btn.textContent = '입장하기';
+  }
+};
+document.getElementById('authPasswordInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('authSubmitBtn').click();
+});
+
+document.getElementById('newUserSubmitBtn').onclick = async () => {
+  const username = document.getElementById('newUsernameInput').value.trim();
+  const password = document.getElementById('newPasswordInput').value;
+  hideAuthError();
+  if (!username || !password) { showAuthError('이름과 비밀번호를 입력해줘.'); return; }
+  if (password.length < 6) { showAuthError('비밀번호는 6자 이상이어야 해요.'); return; }
+  const btn = document.getElementById('newUserSubmitBtn');
+  btn.disabled = true; btn.textContent = '처리 중...';
+  try {
+    const email = await usernameToEmail(username);
+    const { data, error } = await supabaseClient.auth.signUp({ email, password });
+    if (error) throw error;
+    if (data.user && !data.session) {
+      showAuthError('관리자에게 Supabase "Confirm email" 설정을 꺼달라고 요청해줘.');
+      btn.disabled = false; btn.textContent = '추가하고 입장하기';
+      return;
+    }
+    await supabaseClient.from('dashboard_profiles').upsert({ id: data.user.id, username });
+    selectedUsername = username;
+    await onAuthReady();
+  } catch (e) {
+    showAuthError(e.message && e.message.includes('already registered') ? '이미 있는 이름이에요.' : (e.message || '오류가 발생했어요.'));
+    btn.disabled = false; btn.textContent = '추가하고 입장하기';
+  }
+};
+
+document.getElementById('logoutBtn').onclick = async () => {
+  await supabaseClient.auth.signOut();
+  currentUserId = null;
+  selectedUsername = null;
+  document.getElementById('mainContent').classList.add('hidden');
+  document.getElementById('authScreen').classList.remove('hidden');
+  showAuthStep('select');
+  loadUserTabs();
+};
+
+async function onAuthReady() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return;
+  currentUserId = user.id;
+  document.getElementById('currentUserLabel').textContent = selectedUsername || '';
+  if (currentUserId === ADMIN_USER_ID) {
+    document.getElementById('currentUserLabel').innerHTML += ' <span class="admin-badge">관리자</span>';
+  }
+  document.getElementById('authScreen').classList.add('hidden');
+  document.getElementById('mainContent').classList.remove('hidden');
+  await init();
+}
+
+async function initAuth() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session && session.user) {
+    try {
+      const { data } = await supabaseClient.from('dashboard_profiles').select('username').eq('id', session.user.id).maybeSingle();
+      selectedUsername = data ? data.username : null;
+    } catch (e) {}
+    await onAuthReady();
+  } else {
+    showAuthStep('select');
+    loadUserTabs();
+  }
+}
+
+function projectKey(userId, slug) { return userId + '::' + slug; }
+
+async function loadProjects() {
+  const { data: projects, error } = await supabaseClient.from('nb_projects').select('*').order('created_at', { ascending: true });
+  if (error || !projects || !projects.length) {
+    document.getElementById('projectSelect').innerHTML = '<option>등록된 프로젝트 없음</option>';
+    return false;
+  }
+
+  let profileMap = {};
+  if (currentUserId === ADMIN_USER_ID) {
+    const { data: profiles } = await supabaseClient.from('dashboard_profiles').select('id,username');
+    (profiles || []).forEach(p => { profileMap[p.id] = p.username; });
+  }
+
+  PROJECTS = {};
+  projects.forEach(p => {
+    const key = projectKey(p.user_id, p.slug);
+    const ownerName = profileMap[p.user_id];
+    const label = (currentUserId === ADMIN_USER_ID && p.user_id !== currentUserId && ownerName)
+      ? `${p.label} (${ownerName})` : p.label;
+    PROJECTS[key] = {
+      slug: p.slug, userId: p.user_id, label,
+      blogId: p.blog_id || '', blogUrl: p.blog_id ? `blog.naver.com/${p.blog_id}` : '(블로그 미등록)',
+    };
+  });
+
+  if (!currentProject || !PROJECTS[currentProject]) {
+    const own = Object.keys(PROJECTS).find(k => PROJECTS[k].userId === currentUserId);
+    currentProject = own || Object.keys(PROJECTS)[0];
+  }
+
+  initProjectSelect();
+  return true;
+}
+
+function initProjectSelect() {
+  const sel = document.getElementById('projectSelect');
+  sel.innerHTML = Object.entries(PROJECTS).map(([key, p]) =>
+    `<option value="${key}" ${key === currentProject ? 'selected' : ''}>${p.label}</option>`
+  ).join('');
+  document.getElementById('blogUrlLabel').textContent = PROJECTS[currentProject].blogUrl;
+
+  sel.onchange = () => {
+    currentProject = sel.value;
+    localStorage.setItem('nb_current_project', currentProject);
+    document.getElementById('blogUrlLabel').textContent = PROJECTS[currentProject].blogUrl;
+    closeProjectForm();
+    loadDashboard();
+    suggestKeyword();
+  };
+}
+
+// ===== 프로젝트 추가/수정/삭제 =====
+let projectFormMode = 'new'; // 'new' | 'edit'
+let editingOriginalSlug = null;
+
+function openProjectForm(mode) {
+  projectFormMode = mode;
+  const form = document.getElementById('projectForm');
+  const slugInput = document.getElementById('pfSlug');
+  const urlInput = document.getElementById('pfBlogUrl');
+  const deleteBtn = document.getElementById('pfDeleteBtn');
+
+  if (mode === 'edit' && currentProject) {
+    editingOriginalSlug = PROJECTS[currentProject].slug;
+    slugInput.value = editingOriginalSlug;
+    slugInput.disabled = false;
+    urlInput.value = PROJECTS[currentProject].blogId || '';
+    deleteBtn.style.display = 'inline-block';
+  } else {
+    editingOriginalSlug = null;
+    slugInput.value = '';
+    slugInput.disabled = false;
+    urlInput.value = '';
+    deleteBtn.style.display = 'none';
+  }
+
+  form.classList.add('open');
+  slugInput.focus();
+}
+
+function closeProjectForm() {
+  document.getElementById('projectForm').classList.remove('open');
+}
+
+document.getElementById('newProjectBtn').onclick = () => openProjectForm('new');
+document.getElementById('editProjectBtn').onclick = () => {
+  if (!currentProject) { alert('먼저 프로젝트를 만들어줘.'); return; }
+  openProjectForm('edit');
+};
+document.getElementById('pfCancelBtn').onclick = closeProjectForm;
+
+document.getElementById('pfSaveBtn').onclick = async () => {
+  const slug = document.getElementById('pfSlug').value.trim();
+  const blogUrlRaw = document.getElementById('pfBlogUrl').value.trim();
+  const blogId = blogUrlRaw.includes('naver.com') ? blogUrlRaw.replace(/\/$/, '').split('/').pop() : blogUrlRaw;
+  const saveBtn = document.getElementById('pfSaveBtn');
+
+  if (!slug) { alert('프로젝트 이름을 입력해줘.'); return; }
+
+  if (projectFormMode === 'new') {
+    const { error } = await supabaseClient.from('nb_projects').insert({ slug, label: slug, blog_id: blogId || null });
+    if (error) { alert('추가 실패: ' + error.message); return; }
+    currentProject = projectKey(currentUserId, slug);
+    localStorage.setItem('nb_current_project', currentProject);
+  } else {
+    const p = PROJECTS[currentProject];
+    const renamed = slug !== editingOriginalSlug;
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = renamed ? '이름 바꾸는 중...' : '저장 중...';
+    try {
+      const { error } = await supabaseClient.from('nb_projects')
+        .update({ slug, label: slug, blog_id: blogId || null })
+        .eq('slug', p.slug).eq('user_id', p.userId);
+      if (error) throw error;
+
+      if (renamed) {
+        // 이 프로젝트에 딸린 키워드/통계/발행이력도 전부 새 이름으로 같이 옮김
+        for (const table of ['nb_keywords', 'nb_daily_stats', 'nb_posts']) {
+          const { error: renameErr } = await supabaseClient.from(table)
+            .update({ project: slug }).eq('project', editingOriginalSlug).eq('user_id', p.userId);
+          if (renameErr) throw renameErr;
+        }
+        currentProject = projectKey(p.userId, slug);
+        localStorage.setItem('nb_current_project', currentProject);
+      }
+    } catch (e) {
+      alert('수정 실패: ' + e.message);
+      saveBtn.disabled = false; saveBtn.textContent = '저장';
+      return;
+    }
+    saveBtn.disabled = false; saveBtn.textContent = '저장';
+  }
+
+  closeProjectForm();
+  const ok = await loadProjects();
+  if (ok) { loadDashboard(); suggestKeyword(); }
+};
+
+document.getElementById('pfDeleteBtn').onclick = async () => {
+  const p = PROJECTS[currentProject];
+  if (!confirm(`'${p.label}' 프로젝트를 삭제할까요? (키워드/순위/통계 데이터는 남아있지만 프로젝트 목록에서는 사라져요)`)) return;
+  const { error } = await supabaseClient.from('nb_projects').delete().eq('slug', p.slug).eq('user_id', p.userId);
+  if (error) { alert('삭제 실패: ' + error.message); return; }
+  currentProject = null;
+  localStorage.removeItem('nb_current_project');
+  closeProjectForm();
+  const ok = await loadProjects();
+  if (ok) { loadDashboard(); suggestKeyword(); }
+};
 
 function rankClass(rank){
   if (rank === null || rank === undefined) return 'rank-none';
@@ -303,15 +763,18 @@ async function loadDashboard(){
   }
 
   try {
+    const p = PROJECTS[currentProject];
     const { data: keywords, error: kwErr } = await supabaseClient
-      .from('nb_keywords').select('*').eq('status', 'active');
+      .from('nb_keywords').select('*').eq('status', 'active').eq('project', p.slug).eq('user_id', p.userId);
     if (kwErr) throw kwErr;
 
     document.getElementById('statKeywordCount').textContent = keywords.length;
 
     const { data: ranks } = await supabaseClient
       .from('nb_rank_history')
-      .select('*, nb_keywords(keyword)')
+      .select('*, nb_keywords!inner(keyword, project, user_id)')
+      .eq('nb_keywords.project', p.slug)
+      .eq('nb_keywords.user_id', p.userId)
       .order('checked_date', { ascending: false });
 
     if (ranks && ranks.length > 0) {
@@ -338,7 +801,7 @@ async function loadDashboard(){
     }
 
     const { data: stats } = await supabaseClient
-      .from('nb_daily_stats').select('*').order('stat_date', { ascending: true }).limit(30);
+      .from('nb_daily_stats').select('*').eq('project', p.slug).eq('user_id', p.userId).order('stat_date', { ascending: true }).limit(30);
 
     if (stats && stats.length > 0) {
       const today = stats[stats.length - 1];
@@ -373,7 +836,7 @@ async function loadDashboard(){
     }
 
     const { data: posts } = await supabaseClient
-      .from('nb_posts').select('*').order('published_date', { ascending: false }).limit(15);
+      .from('nb_posts').select('*').eq('project', p.slug).eq('user_id', p.userId).order('published_date', { ascending: false }).limit(15);
 
     document.getElementById('statPosts').textContent = posts ? posts.length : 0;
     document.getElementById('postCount').textContent = (posts ? posts.length : 0) + '건';
@@ -399,15 +862,14 @@ async function loadDashboard(){
   }
 }
 
-loadDashboard();
-setInterval(loadDashboard, 60000);
-
 // ===== 키워드 후보 =====
 async function fetchKeywordCandidates() {
+  const p = PROJECTS[currentProject];
+  if (!p) return [];
   const { data: keywords } = await supabaseClient
-    .from('nb_keywords').select('id,keyword,search_volume').eq('status', 'active');
+    .from('nb_keywords').select('id,keyword,search_volume').eq('status', 'active').eq('project', p.slug).eq('user_id', p.userId);
   const { data: posts } = await supabaseClient
-    .from('nb_posts').select('keyword_id');
+    .from('nb_posts').select('keyword_id').eq('project', p.slug).eq('user_id', p.userId);
 
   if (!keywords || !keywords.length) return [];
   const postedIds = new Set((posts || []).map(p => p.keyword_id).filter(Boolean));
@@ -462,7 +924,6 @@ async function toggleKeywordCandidates() {
 }
 
 document.getElementById('suggestBtn').onclick = toggleKeywordCandidates;
-suggestKeyword();
 
 // ===== 요일 버튼: 입력값 복사 + Gems 새 탭 열기 =====
 const dayBtnsEl = document.getElementById('dayBtns');
@@ -500,6 +961,115 @@ async function sendToGems(day) {
     statusEl.textContent = '클립보드 복사 실패: ' + e.message;
   }
 }
+
+// ===== 새 주제 키워드 검색 (Vercel 프록시 경유) =====
+let lastSearchResults = [];
+let lastSearchTopic = '';
+
+function renderSearchResults(results) {
+  const box = document.getElementById('searchResults');
+  if (!results.length) {
+    box.innerHTML = `<div class="kw-row">결과가 없어요.</div>`;
+    return;
+  }
+  box.innerHTML = results.map(r => `
+    <div class="kw-row">
+      <span>${r.keyword}</span>
+      <span class="kw-vol">${r.total.toLocaleString()}</span>
+    </div>
+  `).join('');
+}
+
+document.getElementById('searchBtn').onclick = async () => {
+  const statusEl = document.getElementById('searchStatus');
+  const topic = document.getElementById('searchTopic').value.trim();
+  const btn = document.getElementById('searchBtn');
+
+  if (!KEYWORD_SEARCH_PROXY || KEYWORD_SEARCH_PROXY.startsWith('여기에')) {
+    statusEl.textContent = '검색 프록시 주소가 설정 안 되어 있어요 (스크립트 상단 KEYWORD_SEARCH_PROXY 참고)';
+    return;
+  }
+  if (!topic) {
+    statusEl.textContent = '주제를 먼저 입력해줘.';
+    return;
+  }
+
+  btn.disabled = true;
+  statusEl.textContent = `'${topic}' 연관 키워드 검색 중...`;
+  document.getElementById('searchActions').style.display = 'none';
+
+  try {
+    const url = `${KEYWORD_SEARCH_PROXY}?topic=${encodeURIComponent(topic)}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '검색 실패');
+
+    lastSearchResults = data.results || [];
+    lastSearchTopic = topic;
+    renderSearchResults(lastSearchResults);
+    statusEl.textContent = `${lastSearchResults.length}개 결과 (검색량 높은 순)`;
+    document.getElementById('searchActions').style.display = lastSearchResults.length ? 'flex' : 'none';
+  } catch (e) {
+    statusEl.textContent = '검색 실패: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('saveSearchBtn').onclick = async () => {
+  const statusEl = document.getElementById('searchStatus');
+  const blogUrl = document.getElementById('searchBlogUrl').value.trim();
+  const myKey = projectKey(currentUserId, lastSearchTopic);
+  const isNewProject = !PROJECTS[myKey];
+
+  if (isNewProject && !blogUrl) {
+    statusEl.textContent = `'${lastSearchTopic}'은 새 주제예요. 저장하려면 블로그 주소도 입력해줘.`;
+    return;
+  }
+
+  statusEl.textContent = '저장 중...';
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const resp = await fetch(KEYWORD_SEARCH_PROXY, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token,
+      },
+      body: JSON.stringify({ topic: lastSearchTopic, blogUrl, register: true }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '저장 실패');
+
+    statusEl.textContent = `'${lastSearchTopic}' 저장 완료! 대시보드에 반영할게요.`;
+    document.getElementById('searchTopic').value = '';
+    document.getElementById('searchBlogUrl').value = '';
+    document.getElementById('searchActions').style.display = 'none';
+    document.getElementById('searchResults').innerHTML = '';
+
+    const ok = await loadProjects();
+    if (ok) { currentProject = myKey; localStorage.setItem('nb_current_project', currentProject); initProjectSelect(); loadDashboard(); suggestKeyword(); }
+  } catch (e) {
+    statusEl.textContent = '저장 실패: ' + e.message;
+  }
+};
+
+// ===== 초기화: 프로젝트부터 불러온 뒤 나머지 로드 =====
+async function init() {
+  if (!supabaseClient) {
+    document.getElementById('syncText').textContent = 'Supabase 키 미설정 (스크립트 상단 참고)';
+    return;
+  }
+  const ok = await loadProjects();
+  if (!ok) {
+    document.getElementById('syncText').textContent = '등록된 프로젝트가 없어요 (우측 "+ 새 프로젝트"로 바로 추가 가능)';
+    return;
+  }
+  loadDashboard();
+  setInterval(loadDashboard, 60000);
+  suggestKeyword();
+}
+initAuth();
 </script>
 </body>
 </html>
