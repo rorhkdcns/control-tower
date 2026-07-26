@@ -379,6 +379,10 @@
       <div class="section-title">키워드별 순위</div>
       <div class="section-hint" id="rankUpdated">최근 조회일 –</div>
     </div>
+    <div class="keyword-row">
+      <input type="text" id="quickAddKeywordInput" placeholder="키워드 직접 추가 (예: 꿈해몽)">
+      <button id="quickAddKeywordBtn" type="button">추가</button>
+    </div>
     <div id="rankTableWrap">
       <div class="empty">
         <div class="empty-icon">◌</div>
@@ -425,7 +429,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // ↓ 형이 만든 Gemini Gems 링크
 const GEMS_URL = "https://gemini.google.com/gem/4dfc02aa2d0b";
 // ↓ Vercel에 배포한 api-keyword-search.js의 실제 주소 (예: https://coupang-proxy.vercel.app/api/keyword-search)
-const KEYWORD_SEARCH_PROXY = "여기에_Vercel_프록시_주소_입력";
+const KEYWORD_SEARCH_PROXY = "https://coupang-proxy-73un.vercel.app/api/keyword-search";
 // ============================================================
 
 const DAY_CATEGORIES = [
@@ -777,27 +781,40 @@ async function loadDashboard(){
       .eq('nb_keywords.user_id', p.userId)
       .order('checked_date', { ascending: false });
 
-    if (ranks && ranks.length > 0) {
+    if (keywords.length > 0) {
       const latestByKeyword = {};
-      ranks.forEach(r => {
+      (ranks || []).forEach(r => {
         const k = r.keyword_id;
         if (!latestByKeyword[k]) latestByKeyword[k] = r;
       });
-      const rows = Object.values(latestByKeyword);
 
-      let html = '<table><thead><tr><th>키워드</th><th>통합검색</th><th>블로그탭</th><th>조회일</th></tr></thead><tbody>';
-      rows.forEach(r => {
-        const kwName = r.nb_keywords ? r.nb_keywords.keyword : '-';
+      let html = '<table><thead><tr><th>키워드</th><th>통합검색</th><th>블로그탭</th><th>조회일</th><th></th></tr></thead><tbody>';
+      keywords.forEach(kw => {
+        const r = latestByKeyword[kw.id];
         html += `<tr>
-          <td class="kw">${kwName}</td>
-          <td><span class="rank-pill ${rankClass(r.integrated_rank)}">${r.integrated_rank ?? '–'}</span></td>
-          <td><span class="rank-pill ${rankClass(r.blog_tab_rank)}">${r.blog_tab_rank ?? '–'}</span></td>
-          <td class="rank-none">${r.checked_date}</td>
+          <td class="kw">${kw.keyword}</td>
+          <td><span class="rank-pill ${rankClass(r ? r.integrated_rank : null)}">${r ? (r.integrated_rank ?? '–') : '–'}</span></td>
+          <td><span class="rank-pill ${rankClass(r ? r.blog_tab_rank : null)}">${r ? (r.blog_tab_rank ?? '–') : '–'}</span></td>
+          <td class="rank-none">${r ? r.checked_date : '조회 전'}</td>
+          <td><span data-del-kw="${kw.id}" style="cursor:pointer; color:var(--text-dim); font-size:12px;" title="키워드 삭제">✕</span></td>
         </tr>`;
       });
       html += '</tbody></table>';
       document.getElementById('rankTableWrap').innerHTML = html;
-      document.getElementById('rankUpdated').textContent = '최근 조회일 ' + rows[0].checked_date;
+      if (ranks && ranks.length) {
+        const latest = Object.values(latestByKeyword).sort((a, b) => b.checked_date.localeCompare(a.checked_date))[0];
+        document.getElementById('rankUpdated').textContent = '최근 조회일 ' + latest.checked_date;
+      } else {
+        document.getElementById('rankUpdated').textContent = '아직 순위 조회 전';
+      }
+
+      document.querySelectorAll('[data-del-kw]').forEach(el => {
+        el.onclick = async () => {
+          if (!confirm('이 키워드를 삭제할까요? (순위 기록도 같이 지워져요)')) return;
+          await supabaseClient.from('nb_keywords').delete().eq('id', el.dataset.delKw);
+          loadDashboard();
+        };
+      });
     }
 
     const { data: stats } = await supabaseClient
@@ -924,6 +941,25 @@ async function toggleKeywordCandidates() {
 }
 
 document.getElementById('suggestBtn').onclick = toggleKeywordCandidates;
+
+document.getElementById('quickAddKeywordBtn').onclick = async () => {
+  const input = document.getElementById('quickAddKeywordInput');
+  const keyword = input.value.trim();
+  if (!keyword) return;
+  const p = PROJECTS[currentProject];
+  if (!p) { alert('먼저 프로젝트를 선택해줘.'); return; }
+
+  const { error } = await supabaseClient.from('nb_keywords')
+    .upsert({ keyword, status: 'active', project: p.slug }, { onConflict: 'user_id,keyword,project', ignoreDuplicates: true });
+  if (error) { alert('추가 실패: ' + error.message); return; }
+
+  input.value = '';
+  loadDashboard();
+  suggestKeyword();
+};
+document.getElementById('quickAddKeywordInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('quickAddKeywordBtn').click();
+});
 
 // ===== 요일 버튼: 입력값 복사 + Gems 새 탭 열기 =====
 const dayBtnsEl = document.getElementById('dayBtns');
