@@ -380,11 +380,13 @@
     <div class="keyword-row">
       <input type="text" id="quickAddKeywordInput" placeholder="키워드 직접 추가 (예: 꿈해몽)">
       <button id="quickAddKeywordBtn" type="button">추가</button>
+      <button id="refreshRankBtn" type="button" style="background:var(--accent); color:#04302e; font-weight:700;">순위 새로고침</button>
     </div>
+    <div class="gen-status" id="rankRefreshStatus"></div>
     <div id="rankTableWrap">
       <div class="empty">
         <div class="empty-icon">◌</div>
-        아직 순위 데이터가 없어요.<br>rank_tracker.py를 실행하면 여기에 자동으로 채워집니다.
+        아직 순위 데이터가 없어요.<br>"순위 새로고침" 버튼을 누르면 자동으로 채워집니다.
       </div>
     </div>
   </section>
@@ -428,6 +430,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const GEMS_URL = "https://gemini.google.com/gem/4dfc02aa2d0b";
 // ↓ Vercel에 배포한 api-keyword-search.js의 실제 주소 (예: https://coupang-proxy.vercel.app/api/keyword-search)
 const KEYWORD_SEARCH_PROXY = "https://coupang-proxy-73un.vercel.app/api/keyword-search";
+const RANK_CHECK_PROXY = "https://coupang-proxy-73un.vercel.app/api/rank-check";
 // ============================================================
 
 const DAY_CATEGORIES = [
@@ -801,15 +804,21 @@ async function loadDashboard(){
         postCountByKeyword[row.keyword_id] = (postCountByKeyword[row.keyword_id] || 0) + 1;
       });
 
-      let html = '<table><thead><tr><th>키워드</th><th>검색량</th><th>통합검색</th><th>블로그탭</th><th>포스팅수</th><th>조회일</th><th></th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>키워드</th><th>검색량</th><th>통합검색</th><th>블로그탭</th><th>전체 발행글</th><th>내 발행수</th><th>조회일</th><th></th></tr></thead><tbody>';
       keywords.forEach(kw => {
         const r = latestByKeyword[kw.id];
         const postCount = postCountByKeyword[kw.id] || 0;
+        const totalPosts = r && r.total_post_count != null ? r.total_post_count.toLocaleString() : '–';
+        const integratedLink = r && r.integrated_post_url
+          ? `<a href="${r.integrated_post_url}" target="_blank" rel="noopener" style="color:var(--accent); margin-left:4px; text-decoration:none;" title="이 글 보기">↗</a>` : '';
+        const blogTabLink = r && r.blog_tab_post_url
+          ? `<a href="${r.blog_tab_post_url}" target="_blank" rel="noopener" style="color:var(--accent); margin-left:4px; text-decoration:none;" title="이 글 보기">↗</a>` : '';
         html += `<tr>
           <td class="kw">${kw.keyword}</td>
           <td class="rank-none">${kw.search_volume != null ? kw.search_volume.toLocaleString() : '–'}</td>
-          <td><span class="rank-pill ${rankClass(r ? r.integrated_rank : null)}">${r ? (r.integrated_rank ?? '–') : '–'}</span></td>
-          <td><span class="rank-pill ${rankClass(r ? r.blog_tab_rank : null)}">${r ? (r.blog_tab_rank ?? '–') : '–'}</span></td>
+          <td><span class="rank-pill ${rankClass(r ? r.integrated_rank : null)}">${r ? (r.integrated_rank ?? '–') : '–'}</span>${integratedLink}</td>
+          <td><span class="rank-pill ${rankClass(r ? r.blog_tab_rank : null)}">${r ? (r.blog_tab_rank ?? '–') : '–'}</span>${blogTabLink}</td>
+          <td class="rank-none">${totalPosts}</td>
           <td class="rank-none">${postCount}건</td>
           <td class="rank-none">${r ? r.checked_date : '조회 전'}</td>
           <td><span data-del-kw="${kw.id}" style="cursor:pointer; color:var(--text-dim); font-size:12px;" title="키워드 삭제">✕</span></td>
@@ -977,6 +986,42 @@ document.getElementById('quickAddKeywordInput').addEventListener('keydown', e =>
   if (e.key === 'Enter') document.getElementById('quickAddKeywordBtn').click();
 });
 
+document.getElementById('refreshRankBtn').onclick = async () => {
+  const statusEl = document.getElementById('rankRefreshStatus');
+  const btn = document.getElementById('refreshRankBtn');
+  const p = PROJECTS[currentProject];
+  if (!p) { statusEl.textContent = '먼저 프로젝트를 선택해줘.'; return; }
+
+  if (!RANK_CHECK_PROXY || RANK_CHECK_PROXY.startsWith('여기에')) {
+    statusEl.textContent = '순위조회 프록시 주소가 설정 안 되어 있어요 (스크립트 상단 RANK_CHECK_PROXY 참고)';
+    return;
+  }
+
+  btn.disabled = true;
+  statusEl.textContent = `'${p.label}' 순위 조회 중... (키워드 많으면 1분 정도 걸릴 수 있어요)`;
+
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const resp = await fetch(RANK_CHECK_PROXY, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token,
+      },
+      body: JSON.stringify({ project: p.slug }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '순위 조회 실패');
+
+    statusEl.textContent = `${data.checked}개 키워드 순위 조회 완료!`;
+    loadDashboard();
+  } catch (e) {
+    statusEl.textContent = '순위 조회 실패: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+};
+
 // ===== 요일 버튼: 입력값 복사 + Gems 새 탭 열기 (더블클릭으로 이름 수정 가능) =====
 const dayBtnsEl = document.getElementById('dayBtns');
 
@@ -988,12 +1033,20 @@ DAY_CATEGORIES.forEach(day => {
 function renderDayButtons() {
   dayBtnsEl.innerHTML = '';
   DAY_CATEGORIES.forEach(day => {
+    const wrap = document.createElement('span');
+    wrap.style.cssText = 'display:inline-flex; align-items:center; gap:4px;';
+
     const btn = document.createElement('button');
     btn.className = 'day-btn';
-    btn.title = '더블클릭하면 이름을 바꿀 수 있어요';
     btn.textContent = `${day.short} · ${day.desc}`;
     btn.onclick = () => sendToGems(day);
-    btn.ondblclick = (e) => {
+    wrap.appendChild(btn);
+
+    const editIcon = document.createElement('span');
+    editIcon.textContent = '✎';
+    editIcon.title = '이 버튼 이름 수정';
+    editIcon.style.cssText = 'cursor:pointer; color:var(--text-dim); font-size:12px; margin-left:-6px;';
+    editIcon.onclick = (e) => {
       e.stopPropagation();
       const newLabel = prompt(`'${day.short}요일' 버튼 이름을 입력해줘`, day.desc);
       if (newLabel && newLabel.trim()) {
@@ -1002,7 +1055,9 @@ function renderDayButtons() {
         renderDayButtons();
       }
     };
-    dayBtnsEl.appendChild(btn);
+    wrap.appendChild(editIcon);
+
+    dayBtnsEl.appendChild(wrap);
   });
 }
 renderDayButtons();
