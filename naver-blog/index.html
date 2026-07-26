@@ -344,19 +344,15 @@
 
   <section>
     <div class="section-head">
-      <div class="section-title">새 주제 키워드 검색</div>
-      <div class="section-hint">네이버 검색광고 API</div>
+      <div class="section-title">키워드 검색</div>
+      <div class="section-hint">네이버 검색광고 API · 지금 선택된 블로그에 저장됨</div>
     </div>
 
     <div class="search-row">
       <input type="text" id="searchTopic" placeholder="주제 (예: 가발, 캠핑용품, 강아지사료...)">
       <button id="searchBtn" type="button">검색</button>
     </div>
-    <div class="search-row" id="searchBlogUrlWrap" style="display:none;">
-      <input type="text" id="searchBlogUrl" placeholder="블로그 주소 (예: blog.naver.com/xxxx)" style="flex:1;">
-      <button id="confirmNewProjectBtn" type="button">이 주소로 새 주제 저장</button>
-    </div>
-    <div class="search-status" id="searchStatus">주제를 입력하고 검색하면 연관 키워드가 검색량 순으로 나와요.</div>
+    <div class="search-status" id="searchStatus">주제를 입력하고 검색하면, 지금 선택된 블로그 계정 기준으로 연관 키워드가 검색량 순으로 나와요.</div>
     <div class="search-results" id="searchResults"></div>
     <div class="search-results-actions" id="searchActions" style="display:none;">
       <button id="saveSearchBtn">이 결과 전부 저장</button>
@@ -1095,11 +1091,15 @@ document.getElementById('searchBtn').onclick = async () => {
   }
 };
 
-async function doSaveSearch(blogUrl) {
+async function doSaveSearch() {
   const statusEl = document.getElementById('searchStatus');
-  const myKey = projectKey(currentUserId, lastSearchTopic);
+  const p = PROJECTS[currentProject];
+  if (!p) {
+    statusEl.textContent = '먼저 상단에서 블로그 계정을 선택하거나 "+ 새 프로젝트"로 만들어줘.';
+    return;
+  }
 
-  statusEl.textContent = '저장 중...';
+  statusEl.textContent = `'${p.label}'에 저장 중...`;
   try {
     const { data: { session } } = await supabaseClient.auth.getSession();
     const resp = await fetch(KEYWORD_SEARCH_PROXY, {
@@ -1108,46 +1108,24 @@ async function doSaveSearch(blogUrl) {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + session.access_token,
       },
-      body: JSON.stringify({ topic: lastSearchTopic, blogUrl: blogUrl || '', register: true }),
+      body: JSON.stringify({ topic: lastSearchTopic, project: p.slug, register: true }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || '저장 실패');
 
-    statusEl.textContent = `'${lastSearchTopic}' 저장 완료! 대시보드에 반영할게요.`;
+    statusEl.textContent = `'${p.label}'에 ${data.results.length}개 키워드 저장 완료!`;
     document.getElementById('searchTopic').value = '';
-    document.getElementById('searchBlogUrl').value = '';
-    document.getElementById('searchBlogUrlWrap').style.display = 'none';
     document.getElementById('searchActions').style.display = 'none';
     document.getElementById('searchResults').innerHTML = '';
 
-    const ok = await loadProjects();
-    if (ok) { currentProject = myKey; localStorage.setItem('nb_current_project', currentProject); initProjectSelect(); loadDashboard(); suggestKeyword(); }
+    loadDashboard();
+    suggestKeyword();
   } catch (e) {
     statusEl.textContent = '저장 실패: ' + e.message;
   }
 }
 
-document.getElementById('saveSearchBtn').onclick = async () => {
-  const statusEl = document.getElementById('searchStatus');
-  const myKey = projectKey(currentUserId, lastSearchTopic);
-  const isNewProject = !PROJECTS[myKey];
-
-  if (isNewProject) {
-    // 이미 있는 주제가 아니면 블로그 주소부터 물어봄
-    document.getElementById('searchBlogUrlWrap').style.display = 'flex';
-    document.getElementById('searchBlogUrl').focus();
-    statusEl.textContent = `'${lastSearchTopic}'은 처음 다루는 주제예요. 어느 블로그에 쓸 건지 주소를 알려줘.`;
-    return;
-  }
-
-  await doSaveSearch(null);
-};
-
-document.getElementById('confirmNewProjectBtn').onclick = async () => {
-  const blogUrl = document.getElementById('searchBlogUrl').value.trim();
-  if (!blogUrl) { document.getElementById('searchStatus').textContent = '블로그 주소를 입력해줘.'; return; }
-  await doSaveSearch(blogUrl);
-};
+document.getElementById('saveSearchBtn').onclick = doSaveSearch;
 
 // ===== 초기화: 프로젝트부터 불러온 뒤 나머지 로드 =====
 async function init() {
