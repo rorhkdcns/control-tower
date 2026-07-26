@@ -53,7 +53,9 @@
   }
   .blog-url{
     font-family:var(--font-mono); font-size:13px; color:var(--text-dim); margin-top:6px;
+    text-decoration:none; display:inline-block;
   }
+  .blog-url:hover{color:var(--accent); text-decoration:underline;}
   .sync-status{
     font-family:var(--font-mono); font-size:12px; color:var(--text-dim);
     display:flex; align-items:center; gap:8px;
@@ -295,7 +297,7 @@
     <div>
       <div class="brand-eyebrow">Naver Blog · Rank Radar</div>
       <h1>네이버블로그 관제</h1>
-      <div class="blog-url" id="blogUrlLabel">blog.naver.com/veluna_co</div>
+      <a class="blog-url" id="blogUrlLabel" href="#" target="_blank" rel="noopener">blog.naver.com/veluna_co</a>
     </div>
     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
       <select class="project-select" id="projectSelect"></select>
@@ -348,8 +350,11 @@
 
     <div class="search-row">
       <input type="text" id="searchTopic" placeholder="주제 (예: 가발, 캠핑용품, 강아지사료...)">
-      <input type="text" id="searchBlogUrl" placeholder="블로그 주소 (새 주제 저장할 때만 필요, 예: blog.naver.com/xxxx)">
       <button id="searchBtn" type="button">검색</button>
+    </div>
+    <div class="search-row" id="searchBlogUrlWrap" style="display:none;">
+      <input type="text" id="searchBlogUrl" placeholder="블로그 주소 (예: blog.naver.com/xxxx)" style="flex:1;">
+      <button id="confirmNewProjectBtn" type="button">이 주소로 새 주제 저장</button>
     </div>
     <div class="search-status" id="searchStatus">주제를 입력하고 검색하면 연관 키워드가 검색량 순으로 나와요.</div>
     <div class="search-results" id="searchResults"></div>
@@ -633,17 +638,24 @@ async function loadProjects() {
   return true;
 }
 
+function updateBlogUrlLabel() {
+  const p = PROJECTS[currentProject];
+  const el = document.getElementById('blogUrlLabel');
+  el.textContent = p.blogUrl;
+  el.href = p.blogId ? `https://blog.naver.com/${p.blogId}` : '#';
+}
+
 function initProjectSelect() {
   const sel = document.getElementById('projectSelect');
   sel.innerHTML = Object.entries(PROJECTS).map(([key, p]) =>
     `<option value="${key}" ${key === currentProject ? 'selected' : ''}>${p.label}</option>`
   ).join('');
-  document.getElementById('blogUrlLabel').textContent = PROJECTS[currentProject].blogUrl;
+  updateBlogUrlLabel();
 
   sel.onchange = () => {
     currentProject = sel.value;
     localStorage.setItem('nb_current_project', currentProject);
-    document.getElementById('blogUrlLabel').textContent = PROJECTS[currentProject].blogUrl;
+    updateBlogUrlLabel();
     closeProjectForm();
     loadDashboard();
     suggestKeyword();
@@ -788,13 +800,24 @@ async function loadDashboard(){
         if (!latestByKeyword[k]) latestByKeyword[k] = r;
       });
 
-      let html = '<table><thead><tr><th>키워드</th><th>통합검색</th><th>블로그탭</th><th>조회일</th><th></th></tr></thead><tbody>';
+      const { data: postsForCount } = await supabaseClient
+        .from('nb_posts').select('keyword_id').eq('project', p.slug).eq('user_id', p.userId);
+      const postCountByKeyword = {};
+      (postsForCount || []).forEach(row => {
+        if (!row.keyword_id) return;
+        postCountByKeyword[row.keyword_id] = (postCountByKeyword[row.keyword_id] || 0) + 1;
+      });
+
+      let html = '<table><thead><tr><th>키워드</th><th>검색량</th><th>통합검색</th><th>블로그탭</th><th>포스팅수</th><th>조회일</th><th></th></tr></thead><tbody>';
       keywords.forEach(kw => {
         const r = latestByKeyword[kw.id];
+        const postCount = postCountByKeyword[kw.id] || 0;
         html += `<tr>
           <td class="kw">${kw.keyword}</td>
+          <td class="rank-none">${kw.search_volume != null ? kw.search_volume.toLocaleString() : '–'}</td>
           <td><span class="rank-pill ${rankClass(r ? r.integrated_rank : null)}">${r ? (r.integrated_rank ?? '–') : '–'}</span></td>
           <td><span class="rank-pill ${rankClass(r ? r.blog_tab_rank : null)}">${r ? (r.blog_tab_rank ?? '–') : '–'}</span></td>
+          <td class="rank-none">${postCount}건</td>
           <td class="rank-none">${r ? r.checked_date : '조회 전'}</td>
           <td><span data-del-kw="${kw.id}" style="cursor:pointer; color:var(--text-dim); font-size:12px;" title="키워드 삭제">✕</span></td>
         </tr>`;
@@ -961,15 +984,35 @@ document.getElementById('quickAddKeywordInput').addEventListener('keydown', e =>
   if (e.key === 'Enter') document.getElementById('quickAddKeywordBtn').click();
 });
 
-// ===== 요일 버튼: 입력값 복사 + Gems 새 탭 열기 =====
+// ===== 요일 버튼: 입력값 복사 + Gems 새 탭 열기 (더블클릭으로 이름 수정 가능) =====
 const dayBtnsEl = document.getElementById('dayBtns');
+
 DAY_CATEGORIES.forEach(day => {
-  const btn = document.createElement('button');
-  btn.className = 'day-btn';
-  btn.textContent = `${day.short} · ${day.desc}`;
-  btn.onclick = () => sendToGems(day);
-  dayBtnsEl.appendChild(btn);
+  const stored = localStorage.getItem('nb_day_label_' + day.short);
+  if (stored) day.desc = stored;
 });
+
+function renderDayButtons() {
+  dayBtnsEl.innerHTML = '';
+  DAY_CATEGORIES.forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'day-btn';
+    btn.title = '더블클릭하면 이름을 바꿀 수 있어요';
+    btn.textContent = `${day.short} · ${day.desc}`;
+    btn.onclick = () => sendToGems(day);
+    btn.ondblclick = (e) => {
+      e.stopPropagation();
+      const newLabel = prompt(`'${day.short}요일' 버튼 이름을 입력해줘`, day.desc);
+      if (newLabel && newLabel.trim()) {
+        day.desc = newLabel.trim();
+        localStorage.setItem('nb_day_label_' + day.short, day.desc);
+        renderDayButtons();
+      }
+    };
+    dayBtnsEl.appendChild(btn);
+  });
+}
+renderDayButtons();
 
 async function sendToGems(day) {
   const statusEl = document.getElementById('genStatus');
@@ -1052,16 +1095,9 @@ document.getElementById('searchBtn').onclick = async () => {
   }
 };
 
-document.getElementById('saveSearchBtn').onclick = async () => {
+async function doSaveSearch(blogUrl) {
   const statusEl = document.getElementById('searchStatus');
-  const blogUrl = document.getElementById('searchBlogUrl').value.trim();
   const myKey = projectKey(currentUserId, lastSearchTopic);
-  const isNewProject = !PROJECTS[myKey];
-
-  if (isNewProject && !blogUrl) {
-    statusEl.textContent = `'${lastSearchTopic}'은 새 주제예요. 저장하려면 블로그 주소도 입력해줘.`;
-    return;
-  }
 
   statusEl.textContent = '저장 중...';
   try {
@@ -1072,7 +1108,7 @@ document.getElementById('saveSearchBtn').onclick = async () => {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + session.access_token,
       },
-      body: JSON.stringify({ topic: lastSearchTopic, blogUrl, register: true }),
+      body: JSON.stringify({ topic: lastSearchTopic, blogUrl: blogUrl || '', register: true }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || '저장 실패');
@@ -1080,6 +1116,7 @@ document.getElementById('saveSearchBtn').onclick = async () => {
     statusEl.textContent = `'${lastSearchTopic}' 저장 완료! 대시보드에 반영할게요.`;
     document.getElementById('searchTopic').value = '';
     document.getElementById('searchBlogUrl').value = '';
+    document.getElementById('searchBlogUrlWrap').style.display = 'none';
     document.getElementById('searchActions').style.display = 'none';
     document.getElementById('searchResults').innerHTML = '';
 
@@ -1088,6 +1125,28 @@ document.getElementById('saveSearchBtn').onclick = async () => {
   } catch (e) {
     statusEl.textContent = '저장 실패: ' + e.message;
   }
+}
+
+document.getElementById('saveSearchBtn').onclick = async () => {
+  const statusEl = document.getElementById('searchStatus');
+  const myKey = projectKey(currentUserId, lastSearchTopic);
+  const isNewProject = !PROJECTS[myKey];
+
+  if (isNewProject) {
+    // 이미 있는 주제가 아니면 블로그 주소부터 물어봄
+    document.getElementById('searchBlogUrlWrap').style.display = 'flex';
+    document.getElementById('searchBlogUrl').focus();
+    statusEl.textContent = `'${lastSearchTopic}'은 처음 다루는 주제예요. 어느 블로그에 쓸 건지 주소를 알려줘.`;
+    return;
+  }
+
+  await doSaveSearch(null);
+};
+
+document.getElementById('confirmNewProjectBtn').onclick = async () => {
+  const blogUrl = document.getElementById('searchBlogUrl').value.trim();
+  if (!blogUrl) { document.getElementById('searchStatus').textContent = '블로그 주소를 입력해줘.'; return; }
+  await doSaveSearch(blogUrl);
 };
 
 // ===== 초기화: 프로젝트부터 불러온 뒤 나머지 로드 =====
