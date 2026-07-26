@@ -765,6 +765,99 @@ function rankClass(rank){
   return 'rank-bad';
 }
 
+// ===== 키워드별 순위 표: 정렬 가능한 헤더 =====
+let lastRankTableData = null;
+let rankSortState = { key: null, dir: 1 };
+
+const RANK_COLUMNS = [
+  { key: 'keyword', label: '키워드' },
+  { key: 'search_volume', label: '검색량' },
+  { key: 'integrated_rank', label: '통합검색' },
+  { key: 'blog_tab_rank', label: '블로그탭' },
+  { key: 'total_post_count', label: '전체 발행글' },
+  { key: 'post_count', label: '내 발행수' },
+  { key: 'checked_date', label: '조회일' },
+];
+
+function getSortValue(kw, r, postCount, key) {
+  switch (key) {
+    case 'keyword': return kw.keyword;
+    case 'search_volume': return kw.search_volume ?? -1;
+    case 'integrated_rank': return (r && r.integrated_rank != null) ? r.integrated_rank : Infinity;
+    case 'blog_tab_rank': return (r && r.blog_tab_rank != null) ? r.blog_tab_rank : Infinity;
+    case 'total_post_count': return (r && r.total_post_count != null) ? r.total_post_count : -1;
+    case 'post_count': return postCount;
+    case 'checked_date': return r ? r.checked_date : '';
+    default: return 0;
+  }
+}
+
+function renderRankTable() {
+  if (!lastRankTableData) return;
+  const { keywords, latestByKeyword, postCountByKeyword } = lastRankTableData;
+
+  let rows = keywords.map(kw => ({
+    kw, r: latestByKeyword[kw.id], postCount: postCountByKeyword[kw.id] || 0,
+  }));
+
+  if (rankSortState.key) {
+    rows.sort((a, b) => {
+      const va = getSortValue(a.kw, a.r, a.postCount, rankSortState.key);
+      const vb = getSortValue(b.kw, b.r, b.postCount, rankSortState.key);
+      if (va < vb) return -1 * rankSortState.dir;
+      if (va > vb) return 1 * rankSortState.dir;
+      return 0;
+    });
+  }
+
+  const headHtml = RANK_COLUMNS.map(col => {
+    const active = rankSortState.key === col.key;
+    const arrow = active ? (rankSortState.dir === 1 ? ' ▲' : ' ▼') : '';
+    return `<th data-sort-key="${col.key}" style="cursor:pointer; ${active ? 'color:var(--accent);' : ''}">${col.label}${arrow}</th>`;
+  }).join('') + '<th></th>';
+
+  let html = `<table><thead><tr>${headHtml}</tr></thead><tbody>`;
+  rows.forEach(({ kw, r, postCount }) => {
+    const totalPosts = r && r.total_post_count != null ? r.total_post_count.toLocaleString() : '–';
+    const integratedLink = r && r.integrated_post_url
+      ? `<a href="${r.integrated_post_url}" target="_blank" rel="noopener" style="color:var(--accent); margin-left:4px; text-decoration:none;" title="이 글 보기">↗</a>` : '';
+    const blogTabLink = r && r.blog_tab_post_url
+      ? `<a href="${r.blog_tab_post_url}" target="_blank" rel="noopener" style="color:var(--accent); margin-left:4px; text-decoration:none;" title="이 글 보기">↗</a>` : '';
+    html += `<tr>
+      <td class="kw">${kw.keyword}</td>
+      <td class="rank-none">${kw.search_volume != null ? kw.search_volume.toLocaleString() : '–'}</td>
+      <td><span class="rank-pill ${rankClass(r ? r.integrated_rank : null)}">${r ? (r.integrated_rank ?? '–') : '–'}</span>${integratedLink}</td>
+      <td><span class="rank-pill ${rankClass(r ? r.blog_tab_rank : null)}">${r ? (r.blog_tab_rank ?? '–') : '–'}</span>${blogTabLink}</td>
+      <td class="rank-none">${totalPosts}</td>
+      <td class="rank-none">${postCount}건</td>
+      <td class="rank-none">${r ? r.checked_date : '조회 전'}</td>
+      <td><span data-del-kw="${kw.id}" style="cursor:pointer; color:var(--text-dim); font-size:12px;" title="키워드 삭제">✕</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('rankTableWrap').innerHTML = html;
+
+  document.querySelectorAll('[data-sort-key]').forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.sortKey;
+      if (rankSortState.key === key) {
+        rankSortState.dir *= -1;
+      } else {
+        rankSortState = { key, dir: 1 };
+      }
+      renderRankTable();
+    };
+  });
+
+  document.querySelectorAll('[data-del-kw]').forEach(el => {
+    el.onclick = async () => {
+      if (!confirm('이 키워드를 삭제할까요? (순위 기록도 같이 지워져요)')) return;
+      await supabaseClient.from('nb_keywords').delete().eq('id', el.dataset.delKw);
+      loadDashboard();
+    };
+  });
+}
+
 async function loadDashboard(){
   const dot = document.getElementById('syncDot');
   const txt = document.getElementById('syncText');
@@ -804,42 +897,14 @@ async function loadDashboard(){
         postCountByKeyword[row.keyword_id] = (postCountByKeyword[row.keyword_id] || 0) + 1;
       });
 
-      let html = '<table><thead><tr><th>키워드</th><th>검색량</th><th>통합검색</th><th>블로그탭</th><th>전체 발행글</th><th>내 발행수</th><th>조회일</th><th></th></tr></thead><tbody>';
-      keywords.forEach(kw => {
-        const r = latestByKeyword[kw.id];
-        const postCount = postCountByKeyword[kw.id] || 0;
-        const totalPosts = r && r.total_post_count != null ? r.total_post_count.toLocaleString() : '–';
-        const integratedLink = r && r.integrated_post_url
-          ? `<a href="${r.integrated_post_url}" target="_blank" rel="noopener" style="color:var(--accent); margin-left:4px; text-decoration:none;" title="이 글 보기">↗</a>` : '';
-        const blogTabLink = r && r.blog_tab_post_url
-          ? `<a href="${r.blog_tab_post_url}" target="_blank" rel="noopener" style="color:var(--accent); margin-left:4px; text-decoration:none;" title="이 글 보기">↗</a>` : '';
-        html += `<tr>
-          <td class="kw">${kw.keyword}</td>
-          <td class="rank-none">${kw.search_volume != null ? kw.search_volume.toLocaleString() : '–'}</td>
-          <td><span class="rank-pill ${rankClass(r ? r.integrated_rank : null)}">${r ? (r.integrated_rank ?? '–') : '–'}</span>${integratedLink}</td>
-          <td><span class="rank-pill ${rankClass(r ? r.blog_tab_rank : null)}">${r ? (r.blog_tab_rank ?? '–') : '–'}</span>${blogTabLink}</td>
-          <td class="rank-none">${totalPosts}</td>
-          <td class="rank-none">${postCount}건</td>
-          <td class="rank-none">${r ? r.checked_date : '조회 전'}</td>
-          <td><span data-del-kw="${kw.id}" style="cursor:pointer; color:var(--text-dim); font-size:12px;" title="키워드 삭제">✕</span></td>
-        </tr>`;
-      });
-      html += '</tbody></table>';
-      document.getElementById('rankTableWrap').innerHTML = html;
+      lastRankTableData = { keywords, latestByKeyword, postCountByKeyword };
+      renderRankTable();
       if (ranks && ranks.length) {
         const latest = Object.values(latestByKeyword).sort((a, b) => b.checked_date.localeCompare(a.checked_date))[0];
         document.getElementById('rankUpdated').textContent = '최근 조회일 ' + latest.checked_date;
       } else {
         document.getElementById('rankUpdated').textContent = '아직 순위 조회 전';
       }
-
-      document.querySelectorAll('[data-del-kw]').forEach(el => {
-        el.onclick = async () => {
-          if (!confirm('이 키워드를 삭제할까요? (순위 기록도 같이 지워져요)')) return;
-          await supabaseClient.from('nb_keywords').delete().eq('id', el.dataset.delKw);
-          loadDashboard();
-        };
-      });
     }
 
     const { data: stats } = await supabaseClient
