@@ -1078,7 +1078,16 @@ document.getElementById('refreshRankBtn').onclick = async () => {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || '순위 조회 실패');
 
-    statusEl.textContent = `${data.checked}개 키워드 순위 조회 완료!`;
+    const errored = (data.results || []).filter(r => r.error);
+    const volumeErrored = (data.results || []).filter(r => r.totalPostCountError);
+
+    let msg = `${data.checked}개 키워드 순위 조회 완료!`;
+    if (errored.length) {
+      msg += ` (${errored.length}개 실패: ${errored[0].keyword} - ${errored[0].error})`;
+    } else if (volumeErrored.length) {
+      msg += ` 다만 "전체 발행글" 조회는 실패: ${volumeErrored[0].totalPostCountError}`;
+    }
+    statusEl.textContent = msg;
     loadDashboard();
   } catch (e) {
     statusEl.textContent = '순위 조회 실패: ' + e.message;
