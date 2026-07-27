@@ -342,19 +342,6 @@
     </div>
   </div>
 
-  <section>
-    <div class="section-head">
-      <div class="section-title">키워드 검색</div>
-      <div class="section-hint">네이버 검색광고 API · 지금 선택된 블로그에 저장됨</div>
-    </div>
-
-    <div class="search-row">
-      <input type="text" id="searchTopic" placeholder="주제 (예: 가발, 캠핑용품, 강아지사료...)">
-      <button id="searchBtn" type="button">검색</button>
-    </div>
-    <div class="search-status" id="searchStatus">주제를 입력하고 검색하면, 지금 선택된 블로그 계정에 연관 키워드가 검색량 순으로 자동 저장돼요.</div>
-    <div class="search-results" id="searchResults"></div>
-  </section>
 
   <section>
     <div class="section-head">
@@ -364,9 +351,7 @@
 
     <div class="keyword-row">
       <input type="text" id="keywordInput" placeholder="키워드 (비워두면 추천 키워드 자동 사용)">
-      <button id="suggestBtn" type="button">키워드 후보 보기</button>
     </div>
-    <div class="kw-candidates" id="kwCandidates"></div>
 
     <div class="day-btns" id="dayBtns"></div>
     <div class="gen-status" id="genStatus">요일 버튼을 누르면 요일+키워드가 복사되고, Gems 탭이 새로 열려요. 그 탭에 붙여넣기만 하면 돼요.</div>
@@ -655,6 +640,7 @@ function initProjectSelect() {
     closeProjectForm();
     loadDashboard();
     suggestKeyword();
+    if (typeof renderDayButtons === 'function') renderDayButtons();
   };
 }
 
@@ -743,7 +729,7 @@ document.getElementById('pfSaveBtn').onclick = async () => {
 
   closeProjectForm();
   const ok = await loadProjects();
-  if (ok) { loadDashboard(); suggestKeyword(); }
+  if (ok) { loadDashboard(); suggestKeyword(); renderDayButtons(); }
 };
 
 document.getElementById('pfDeleteBtn').onclick = async () => {
@@ -755,7 +741,7 @@ document.getElementById('pfDeleteBtn').onclick = async () => {
   localStorage.removeItem('nb_current_project');
   closeProjectForm();
   const ok = await loadProjects();
-  if (ok) { loadDashboard(); suggestKeyword(); }
+  if (ok) { loadDashboard(); suggestKeyword(); renderDayButtons(); }
 };
 
 function rankClass(rank){
@@ -852,7 +838,14 @@ function renderRankTable() {
   document.querySelectorAll('[data-del-kw]').forEach(el => {
     el.onclick = async () => {
       if (!confirm('이 키워드를 삭제할까요? (순위 기록도 같이 지워져요)')) return;
-      await supabaseClient.from('nb_keywords').delete().eq('id', el.dataset.delKw);
+      const kwId = el.dataset.delKw;
+
+      const { error: rankErr } = await supabaseClient.from('nb_rank_history').delete().eq('keyword_id', kwId);
+      if (rankErr) { alert('삭제 실패(순위기록): ' + rankErr.message); return; }
+
+      const { error: kwErr } = await supabaseClient.from('nb_keywords').delete().eq('id', kwId);
+      if (kwErr) { alert('삭제 실패(키워드): ' + kwErr.message); return; }
+
       loadDashboard();
     };
   });
@@ -995,43 +988,6 @@ async function suggestKeyword() {
   document.getElementById('keywordInput').value = picked.keyword;
 }
 
-async function toggleKeywordCandidates() {
-  const box = document.getElementById('kwCandidates');
-  if (box.classList.contains('open')) {
-    box.classList.remove('open');
-    return;
-  }
-
-  const candidates = await fetchKeywordCandidates();
-  if (!candidates.length) {
-    box.innerHTML = `<div class="kw-row">등록된 키워드가 없어요.</div>`;
-    box.classList.add('open');
-    return;
-  }
-
-  box.innerHTML = candidates.map(k => {
-    const volLabel = (k.search_volume === null || k.search_volume === undefined)
-      ? '<span class="kw-vol none">검색량 미확인</span>'
-      : `<span class="kw-vol">${k.search_volume.toLocaleString()}</span>`;
-    const postedTag = k.posted ? '<span class="kw-tag">(이미 포스팅)</span>' : '';
-    return `<div class="kw-row ${k.posted ? 'posted' : ''}" data-kw="${k.keyword}">
-      <span>${k.keyword}${postedTag}</span>
-      ${volLabel}
-    </div>`;
-  }).join('');
-
-  box.querySelectorAll('[data-kw]').forEach(row => {
-    row.onclick = () => {
-      document.getElementById('keywordInput').value = row.dataset.kw;
-      box.classList.remove('open');
-    };
-  });
-
-  box.classList.add('open');
-}
-
-document.getElementById('suggestBtn').onclick = toggleKeywordCandidates;
-
 document.getElementById('quickAddKeywordBtn').onclick = async () => {
   const input = document.getElementById('quickAddKeywordInput');
   const keyword = input.value.trim();
@@ -1096,22 +1052,30 @@ document.getElementById('refreshRankBtn').onclick = async () => {
   }
 };
 
-// ===== 글쓰기 버튼: 자유롭게 추가/삭제/이름수정/Gems 링크 지정 가능 =====
+// ===== 글쓰기 버튼: 자유롭게 추가/삭제/이름수정/Gems 링크 지정 가능 (프로젝트별로 따로 저장됨) =====
 const dayBtnsEl = document.getElementById('dayBtns');
 
 let writeButtons = [];
-try {
-  const stored = localStorage.getItem('nb_write_buttons');
-  writeButtons = stored ? JSON.parse(stored) : DEFAULT_WRITE_BUTTONS.map(b => ({ ...b }));
-} catch (e) {
-  writeButtons = DEFAULT_WRITE_BUTTONS.map(b => ({ ...b }));
+
+function writeButtonsStorageKey() {
+  return 'nb_write_buttons_' + (currentProject || 'default');
+}
+
+function loadWriteButtons() {
+  try {
+    const stored = localStorage.getItem(writeButtonsStorageKey());
+    writeButtons = stored ? JSON.parse(stored) : DEFAULT_WRITE_BUTTONS.map(b => ({ ...b }));
+  } catch (e) {
+    writeButtons = DEFAULT_WRITE_BUTTONS.map(b => ({ ...b }));
+  }
 }
 
 function saveWriteButtons() {
-  localStorage.setItem('nb_write_buttons', JSON.stringify(writeButtons));
+  localStorage.setItem(writeButtonsStorageKey(), JSON.stringify(writeButtons));
 }
 
 function renderDayButtons() {
+  loadWriteButtons();
   dayBtnsEl.innerHTML = '';
   writeButtons.forEach((btnData, idx) => {
     const wrap = document.createElement('span');
@@ -1216,74 +1180,6 @@ async function sendToGems(btnData) {
   }
 }
 
-// ===== 새 주제 키워드 검색 (Vercel 프록시 경유) =====
-let lastSearchResults = [];
-let lastSearchTopic = '';
-
-function renderSearchResults(results) {
-  const box = document.getElementById('searchResults');
-  if (!results.length) {
-    box.innerHTML = `<div class="kw-row">결과가 없어요.</div>`;
-    return;
-  }
-  box.innerHTML = results.map(r => `
-    <div class="kw-row">
-      <span>${r.keyword}</span>
-      <span class="kw-vol">${r.total.toLocaleString()}</span>
-    </div>
-  `).join('');
-}
-
-document.getElementById('searchBtn').onclick = async () => {
-  const statusEl = document.getElementById('searchStatus');
-  const topic = document.getElementById('searchTopic').value.trim();
-  const btn = document.getElementById('searchBtn');
-
-  if (!KEYWORD_SEARCH_PROXY || KEYWORD_SEARCH_PROXY.startsWith('여기에')) {
-    statusEl.textContent = '검색 프록시 주소가 설정 안 되어 있어요 (스크립트 상단 KEYWORD_SEARCH_PROXY 참고)';
-    return;
-  }
-  if (!topic) {
-    statusEl.textContent = '주제를 먼저 입력해줘.';
-    return;
-  }
-  const p = PROJECTS[currentProject];
-  if (!p) {
-    statusEl.textContent = '먼저 상단에서 블로그 계정을 선택하거나 "+ 새 프로젝트"로 만들어줘.';
-    return;
-  }
-
-  btn.disabled = true;
-  statusEl.textContent = `'${topic}' 연관 키워드 검색 중...`;
-
-  try {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    const resp = await fetch(KEYWORD_SEARCH_PROXY, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + session.access_token,
-      },
-      body: JSON.stringify({ topic, project: p.slug, register: true }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || '검색 실패');
-
-    lastSearchResults = data.results || [];
-    lastSearchTopic = topic;
-    renderSearchResults(lastSearchResults);
-    statusEl.textContent = `${lastSearchResults.length}개 결과 -> '${p.label}'에 자동 저장 완료!`;
-    document.getElementById('searchTopic').value = '';
-
-    loadDashboard();
-    suggestKeyword();
-  } catch (e) {
-    statusEl.textContent = '검색 실패: ' + e.message;
-  } finally {
-    btn.disabled = false;
-  }
-};
-
 // ===== 초기화: 프로젝트부터 불러온 뒤 나머지 로드 =====
 async function init() {
   if (!supabaseClient) {
@@ -1298,6 +1194,7 @@ async function init() {
   loadDashboard();
   setInterval(loadDashboard, 60000);
   suggestKeyword();
+  renderDayButtons();
 }
 initAuth();
 </script>
