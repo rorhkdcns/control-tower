@@ -344,8 +344,8 @@
 
   <section>
     <div class="section-head">
-      <div class="section-title">키워드 검색</div>
-      <div class="section-hint">지금 선택된 블로그에 저장됨</div>
+      <div class="section-title">글쓰기 시작하기</div>
+      <div class="section-hint">검색 → 키워드 선택 → 요일 버튼 → Gems로 이동</div>
     </div>
     <div class="search-row">
       <input type="text" id="searchTopic" placeholder="주제 (예: 가발, 캠핑용품, 강아지사료...)">
@@ -355,20 +355,9 @@
       <span id="searchResultsToggle" style="cursor:pointer; color:var(--accent); font-family:var(--font-mono); font-size:12px;">▲ 결과 접기</span>
     </div>
     <div class="search-results" id="searchResults"></div>
-  </section>
 
-  <section>
-    <div class="section-head">
-      <div class="section-title">글쓰기 시작하기</div>
-      <div class="section-hint">Gemini Gems로 이동</div>
-    </div>
-
-    <div class="keyword-row">
-      <input type="text" id="keywordInput" placeholder="키워드 (비워두면 추천 키워드 자동 사용)">
-    </div>
-
-    <div class="day-btns" id="dayBtns"></div>
-    <div class="gen-status" id="genStatus">요일 버튼을 누르면 요일+키워드가 복사되고, Gems 탭이 새로 열려요. 그 탭에 붙여넣기만 하면 돼요.</div>
+    <div class="day-btns" id="dayBtns" style="margin-top:16px;"></div>
+    <div class="gen-status" id="genStatus">위에서 키워드를 검색해 선택한 뒤(안 고르면 자동 추천), 요일 버튼을 누르면 요일+키워드가 복사되고 Gems 탭이 새로 열려요. 그 탭에 붙여넣기만 하면 돼요.</div>
   </section>
 
   <section>
@@ -994,6 +983,17 @@ async function fetchKeywordCandidates() {
 }
 
 // ===== 키워드 검색 (클릭하면 글쓰기 칸에 채워짐, 결과 접기 가능) =====
+// ===== 선택된 키워드 (입력창 대신 변수로 관리) =====
+let selectedKeyword = '';
+
+function updateSelectedKeywordDisplay() {
+  const el = document.getElementById('genStatus');
+  if (!el) return;
+  el.textContent = selectedKeyword
+    ? `선택된 키워드: ${selectedKeyword} — 요일 버튼을 누르면 Gems로 바로 이동해요.`
+    : '위에서 키워드를 검색해 선택한 뒤(안 고르면 자동 추천), 요일 버튼을 누르면 요일+키워드가 복사되고 Gems 탭이 새로 열려요.';
+}
+
 function renderSearchResults(topic, results) {
   const box = document.getElementById('searchResults');
   const toggleWrap = document.getElementById('searchResultsToggleWrap');
@@ -1013,7 +1013,8 @@ function renderSearchResults(topic, results) {
 
   box.querySelectorAll('[data-kw]').forEach(row => {
     row.onclick = () => {
-      document.getElementById('keywordInput').value = row.dataset.kw;
+      selectedKeyword = row.dataset.kw;
+      updateSelectedKeywordDisplay();
       box.style.display = 'none';
       document.getElementById('searchResultsToggle').textContent = '▼ 결과 펼치기';
     };
@@ -1075,7 +1076,8 @@ async function suggestKeyword() {
   if (!candidates.length) return;
   const notPosted = candidates.filter(k => !k.posted);
   const picked = (notPosted.length ? notPosted : candidates)[0];
-  document.getElementById('keywordInput').value = picked.keyword;
+  selectedKeyword = picked.keyword;
+  updateSelectedKeywordDisplay();
 }
 
 document.getElementById('quickAddKeywordBtn').onclick = async () => {
@@ -1243,15 +1245,14 @@ renderDayButtons();
 
 async function sendToGems(btnData) {
   const statusEl = document.getElementById('genStatus');
-  const keywordInput = document.getElementById('keywordInput');
 
-  let keyword = keywordInput.value.trim();
+  let keyword = selectedKeyword;
   if (!keyword) {
     await suggestKeyword();
-    keyword = keywordInput.value.trim();
+    keyword = selectedKeyword;
   }
   if (!keyword) {
-    statusEl.textContent = '등록된 키워드가 없어요. 위쪽 키워드추적 섹션에 키워드를 먼저 등록해줘.';
+    statusEl.textContent = '등록된 키워드가 없어요. 위쪽에서 키워드를 먼저 검색해줘.';
     return;
   }
 
