@@ -351,7 +351,9 @@
 
     <div class="keyword-row">
       <input type="text" id="keywordInput" placeholder="키워드 (비워두면 추천 키워드 자동 사용)">
+      <button id="suggestBtn" type="button">키워드 후보 보기</button>
     </div>
+    <div class="kw-candidates" id="kwCandidates"></div>
 
     <div class="day-btns" id="dayBtns"></div>
     <div class="gen-status" id="genStatus">요일 버튼을 누르면 요일+키워드가 복사되고, Gems 탭이 새로 열려요. 그 탭에 붙여넣기만 하면 돼요.</div>
@@ -987,6 +989,43 @@ async function suggestKeyword() {
   const picked = (notPosted.length ? notPosted : candidates)[0];
   document.getElementById('keywordInput').value = picked.keyword;
 }
+
+async function toggleKeywordCandidates() {
+  const box = document.getElementById('kwCandidates');
+  if (box.classList.contains('open')) {
+    box.classList.remove('open');
+    return;
+  }
+
+  const candidates = await fetchKeywordCandidates();
+  if (!candidates.length) {
+    box.innerHTML = `<div class="kw-row">등록된 키워드가 없어요.</div>`;
+    box.classList.add('open');
+    return;
+  }
+
+  box.innerHTML = candidates.map(k => {
+    const volLabel = (k.search_volume === null || k.search_volume === undefined)
+      ? '<span class="kw-vol none">검색량 미확인</span>'
+      : `<span class="kw-vol">${k.search_volume.toLocaleString()}</span>`;
+    const postedTag = k.posted ? '<span class="kw-tag">(이미 포스팅)</span>' : '';
+    return `<div class="kw-row ${k.posted ? 'posted' : ''}" data-kw="${k.keyword}">
+      <span>${k.keyword}${postedTag}</span>
+      ${volLabel}
+    </div>`;
+  }).join('');
+
+  box.querySelectorAll('[data-kw]').forEach(row => {
+    row.onclick = () => {
+      document.getElementById('keywordInput').value = row.dataset.kw;
+      box.classList.remove('open');
+    };
+  });
+
+  box.classList.add('open');
+}
+
+document.getElementById('suggestBtn').onclick = toggleKeywordCandidates;
 
 document.getElementById('quickAddKeywordBtn').onclick = async () => {
   const input = document.getElementById('quickAddKeywordInput');
