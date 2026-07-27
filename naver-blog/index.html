@@ -342,6 +342,20 @@
     </div>
   </div>
 
+  <section>
+    <div class="section-head">
+      <div class="section-title">키워드 검색</div>
+      <div class="section-hint">지금 선택된 블로그에 저장됨</div>
+    </div>
+    <div class="search-row">
+      <input type="text" id="searchTopic" placeholder="주제 (예: 가발, 캠핑용품, 강아지사료...)">
+      <button id="searchBtn" type="button">검색</button>
+    </div>
+    <div id="searchResultsToggleWrap" style="display:none; margin-bottom:8px;">
+      <span id="searchResultsToggle" style="cursor:pointer; color:var(--accent); font-family:var(--font-mono); font-size:12px;">▲ 결과 접기</span>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </section>
 
   <section>
     <div class="section-head">
@@ -980,6 +994,78 @@ async function fetchKeywordCandidates() {
     .map(k => ({ ...k, posted: postedIds.has(k.id) }))
     .sort((a, b) => (b.search_volume ?? -1) - (a.search_volume ?? -1));
 }
+
+// ===== 키워드 검색 (클릭하면 글쓰기 칸에 채워짐, 결과 접기 가능) =====
+function renderSearchResults(topic, results) {
+  const box = document.getElementById('searchResults');
+  const toggleWrap = document.getElementById('searchResultsToggleWrap');
+
+  if (!results.length) {
+    box.innerHTML = `<div class="kw-row">결과가 없어요.</div>`;
+    toggleWrap.style.display = 'none';
+    return;
+  }
+
+  box.innerHTML = results.map(r => `
+    <div class="kw-row" data-kw="${r.keyword}" style="cursor:pointer;">
+      <span>${r.keyword} <span class="kw-tag">${topic}</span></span>
+      <span class="kw-vol">${r.total.toLocaleString()}</span>
+    </div>
+  `).join('');
+
+  box.querySelectorAll('[data-kw]').forEach(row => {
+    row.onclick = () => { document.getElementById('keywordInput').value = row.dataset.kw; };
+  });
+
+  box.style.display = 'flex';
+  toggleWrap.style.display = 'block';
+  document.getElementById('searchResultsToggle').textContent = '▲ 결과 접기';
+}
+
+document.getElementById('searchResultsToggle').onclick = () => {
+  const box = document.getElementById('searchResults');
+  const toggle = document.getElementById('searchResultsToggle');
+  const collapsed = box.style.display === 'none';
+  box.style.display = collapsed ? 'flex' : 'none';
+  toggle.textContent = collapsed ? '▲ 결과 접기' : '▼ 결과 펼치기';
+};
+
+document.getElementById('searchBtn').onclick = async () => {
+  const topic = document.getElementById('searchTopic').value.trim();
+  const btn = document.getElementById('searchBtn');
+
+  if (!KEYWORD_SEARCH_PROXY || KEYWORD_SEARCH_PROXY.startsWith('여기에')) {
+    alert('검색 프록시 주소가 설정 안 되어 있어요 (스크립트 상단 KEYWORD_SEARCH_PROXY 참고)');
+    return;
+  }
+  if (!topic) return;
+  const p = PROJECTS[currentProject];
+  if (!p) { alert('먼저 상단에서 블로그 계정을 선택하거나 "+ 새 프로젝트"로 만들어줘.'); return; }
+
+  btn.disabled = true;
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const resp = await fetch(KEYWORD_SEARCH_PROXY, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token,
+      },
+      body: JSON.stringify({ topic, project: p.slug, register: true }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '검색 실패');
+
+    renderSearchResults(topic, data.results || []);
+    document.getElementById('searchTopic').value = '';
+    loadDashboard();
+    suggestKeyword();
+  } catch (e) {
+    alert('검색 실패: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
 
 async function suggestKeyword() {
   if (!supabaseClient) return;
