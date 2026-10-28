@@ -345,7 +345,7 @@
   <section>
     <div class="section-head">
       <div class="section-title">글쓰기 시작하기</div>
-      <div class="section-hint">검색 → 키워드 선택 → 요일 버튼 → Gems로 이동</div>
+      <div class="section-hint">검색 → 키워드 선택 → 요일 버튼 → Gemini 스킬로 작성</div>
     </div>
     <div class="search-row">
       <input type="text" id="searchTopic" placeholder="주제 (예: 가발, 캠핑용품, 강아지사료...)">
@@ -357,7 +357,7 @@
     <div class="search-results" id="searchResults"></div>
 
     <div class="day-btns" id="dayBtns" style="margin-top:16px;"></div>
-    <div class="gen-status" id="genStatus">위에서 키워드를 검색해 선택한 뒤(안 고르면 자동 추천), 요일 버튼을 누르면 요일+키워드가 복사되고 Gems 탭이 새로 열려요. 그 탭에 붙여넣기만 하면 돼요.</div>
+    <div class="gen-status" id="genStatus">위에서 키워드를 검색해 선택한 뒤(안 고르면 자동 추천), 요일 버튼을 누르면 요일+키워드가 복사되고 Gemini 새 창이 열려요. 거기서 /스킬이름 선택 후 붙여넣기만 하면 돼요.</div>
   </section>
 
   <section>
@@ -414,21 +414,22 @@
 // ↓↓↓ 여기 두 줄만 형 Supabase 프로젝트 값으로 채워넣으면 됨
 const SUPABASE_URL = "https://ivlyefexwmjslrlkghlm.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2bHllZmV4d21qc2xybGtnaGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNzMwNDcsImV4cCI6MjA5Njk0OTA0N30.UcGeZbBKr5PfZcAK4RF50E0e2kM57ECM3qBtjBo3Iiw";
-// ↓ 형이 만든 Gemini Gems 링크
-const GEMS_URL = "https://gemini.google.com/gem/4dfc02aa2d0b";
+// ↓ Gems가 스킬로 바뀌면서 일반 Gemini 새 대화창을 열고, 스킬은 "/스킬이름"으로 불러씀
+const GEMINI_URL = "https://gemini.google.com/app";
+const DEFAULT_SKILL = "벨루나포스팅";
 // ↓ Vercel에 배포한 api-keyword-search.js의 실제 주소 (예: https://coupang-proxy.vercel.app/api/keyword-search)
 const KEYWORD_SEARCH_PROXY = "https://coupang-proxy-73un.vercel.app/api/keyword-search";
 const RANK_CHECK_PROXY = "https://coupang-proxy-73un.vercel.app/api/rank-check";
 // ============================================================
 
 const DEFAULT_WRITE_BUTTONS = [
-  { short: "월", desc: "웰니스 에센셜", gemsUrl: "" },
-  { short: "화", desc: "웰니스 팁", gemsUrl: "" },
-  { short: "수", desc: "공감 스토리", gemsUrl: "" },
-  { short: "목", desc: "라이프스타일", gemsUrl: "" },
-  { short: "금", desc: "밤의 큐레이션", gemsUrl: "" },
-  { short: "토", desc: "주말 리프레시", gemsUrl: "" },
-  { short: "일", desc: "주말 리프레시", gemsUrl: "" },
+  { short: "월", desc: "웰니스 에센셜", skill: "" },
+  { short: "화", desc: "웰니스 팁", skill: "" },
+  { short: "수", desc: "공감 스토리", skill: "" },
+  { short: "목", desc: "라이프스타일", skill: "" },
+  { short: "금", desc: "밤의 큐레이션", skill: "" },
+  { short: "토", desc: "주말 리프레시", skill: "" },
+  { short: "일", desc: "주말 리프레시", skill: "" },
 ];
 
 // ↓ 새 프로젝트는 modules/keyword_discovery.py --register 로 만들면 여기 자동으로 나타남
@@ -990,8 +991,8 @@ function updateSelectedKeywordDisplay() {
   const el = document.getElementById('genStatus');
   if (!el) return;
   el.textContent = selectedKeyword
-    ? `선택된 키워드: ${selectedKeyword} — 요일 버튼을 누르면 Gems로 바로 이동해요.`
-    : '위에서 키워드를 검색해 선택한 뒤(안 고르면 자동 추천), 요일 버튼을 누르면 요일+키워드가 복사되고 Gems 탭이 새로 열려요.';
+    ? `선택된 키워드: ${selectedKeyword} — 요일 버튼을 누르면 Gemini 새 창이 열려요.`
+    : '위에서 키워드를 검색해 선택한 뒤(안 고르면 자동 추천), 요일 버튼을 누르면 요일+키워드가 복사되고 Gemini 새 창이 열려요.';
 }
 
 function renderSearchResults(topic, results) {
@@ -1144,7 +1145,7 @@ document.getElementById('refreshRankBtn').onclick = async () => {
   }
 };
 
-// ===== 글쓰기 버튼: 자유롭게 추가/삭제/이름수정/Gems 링크 지정 가능 (프로젝트별로 따로 저장됨) =====
+// ===== 글쓰기 버튼: 자유롭게 추가/삭제/이름수정/스킬 이름 지정 가능 (프로젝트별로 따로 저장됨) =====
 const dayBtnsEl = document.getElementById('dayBtns');
 
 let writeButtons = [];
@@ -1176,7 +1177,7 @@ function renderDayButtons() {
     const btn = document.createElement('button');
     btn.className = 'day-btn';
     btn.textContent = `${btnData.short} · ${btnData.desc}`;
-    btn.title = btnData.gemsUrl ? '전용 Gems로 이동' : '기본 Gems로 이동';
+    btn.title = `Gemini 열기 · 스킬: /${btnData.skill || DEFAULT_SKILL}`;
     btn.onclick = () => sendToGems(btnData);
     wrap.appendChild(btn);
 
@@ -1196,14 +1197,14 @@ function renderDayButtons() {
     wrap.appendChild(editIcon);
 
     const gemsIcon = document.createElement('span');
-    gemsIcon.textContent = '🔗';
-    gemsIcon.title = '이 버튼이 열 Gems 링크 지정 (비우면 기본 Gems 사용)';
+    gemsIcon.textContent = '/';
+    gemsIcon.title = '이 버튼이 쓸 Gemini 스킬 이름 지정 (비우면 ' + DEFAULT_SKILL + ')';
     gemsIcon.style.cssText = 'cursor:pointer; color:var(--text-dim); font-size:11px;';
     gemsIcon.onclick = (e) => {
       e.stopPropagation();
-      const newUrl = prompt(`'${btnData.desc}' 버튼이 열 Gems 링크를 입력해줘 (비우면 기본 Gems 사용)`, btnData.gemsUrl || '');
-      if (newUrl !== null) {
-        btnData.gemsUrl = newUrl.trim();
+      const newSkill = prompt(`'${btnData.desc}' 버튼이 쓸 Gemini 스킬 이름 (비우면 ${DEFAULT_SKILL})`, btnData.skill || DEFAULT_SKILL);
+      if (newSkill !== null) {
+        btnData.skill = newSkill.trim().replace(/^\//, '');
         saveWriteButtons();
         renderDayButtons();
       }
@@ -1234,8 +1235,8 @@ function renderDayButtons() {
     const label = prompt('새 버튼 이름 (예: 뷰카, 이벤트 안내...)');
     if (!label || !label.trim()) return;
     const short = prompt('버튼에 표시할 짧은 이름 (예: 뷰카)', label.trim().slice(0, 4)) || label.trim().slice(0, 4);
-    const gemsUrl = prompt('이 버튼이 열 Gems 링크 (비우면 기본 Gems 사용)', '') || '';
-    writeButtons.push({ short: short.trim(), desc: label.trim(), gemsUrl: gemsUrl.trim() });
+    const skill = prompt('이 버튼이 쓸 Gemini 스킬 이름', DEFAULT_SKILL) || '';
+    writeButtons.push({ short: short.trim(), desc: label.trim(), skill: skill.trim().replace(/^\//, '') });
     saveWriteButtons();
     renderDayButtons();
   };
@@ -1256,16 +1257,17 @@ async function sendToGems(btnData) {
     return;
   }
 
-  const inputText = `오늘 날짜 또는 요일: ${btnData.desc}
-메인 핵심 키워드: ${keyword}
-오늘 포스팅의 핵심 내용: (자유롭게 작성)`;
+  const inputText = `요일: ${btnData.short} (${btnData.desc})
+메인 키워드: ${keyword}
+오늘 핵심 내용: `;
 
-  const targetGems = btnData.gemsUrl || GEMS_URL;
+  const skillName = btnData.skill || DEFAULT_SKILL;
 
   try {
     await navigator.clipboard.writeText(inputText);
-    window.open(targetGems, '_blank');
-    statusEl.textContent = `'${keyword}' / ${btnData.desc} 입력값이 복사됐어요. Gems 탭에 붙여넣기만 하면 돼요.`;
+    window.open(GEMINI_URL, '_blank');
+    statusEl.textContent = `'${keyword}' / ${btnData.desc} 입력값이 복사됐어요. Gemini 창에서 /${skillName} 입력해서 스킬 선택 → Ctrl+V 붙여넣기`;
+    alert(`복사 완료!\n\nGemini 창에서 /${skillName} 입력해서 스킬 선택 → Ctrl+V 붙여넣기`);
   } catch (e) {
     statusEl.textContent = '클립보드 복사 실패: ' + e.message;
   }
